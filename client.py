@@ -40,7 +40,7 @@ class client:
 
 if __name__ == '__main__':
     host = socket.gethostname()
-    port = 7734
+    port = 59440
     c=client(host,port)
 
     while(1):
@@ -59,3 +59,4 @@ if __name__ == '__main__':
         #exit operation
 
     c.close()
+
