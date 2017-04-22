@@ -46,12 +46,14 @@ def recvfileredirect(storage_path,filename,s,slaves):
     request["file_name"] = filename
     request["operation"] = "CREATE"
     request=str(request)
+
     if storage_path is not None:
         if not os.path.exists(storage_path):
             os.makedirs(storage_path)
         f = open(storage_path + '/' +filename , 'wb')
     else:
         f = open(filename, 'wb')
+
     print "printing slaves"
     for slave in slaves:
         print "slave is ",slave
@@ -69,6 +71,11 @@ def recvfileredirect(storage_path,filename,s,slaves):
         for slave in slaves:
             slaves[slave].s.send(l)
         length=length-size
+
+    for slave in slaves:
+        response = sendlib.read_socket(slaves[slave].s)
+        if "200" not in response:
+            print "failed to replicate"
 
 
     f.close()
