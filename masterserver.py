@@ -8,7 +8,7 @@ import random
 import kazoo
 from kazoo.client import KazooClient
 import election
-
+import time
 
 class server:
     def __init__(self,host,port,storage_path,elect):
@@ -38,7 +38,7 @@ class server:
                 if response=="sucess1":
                     break
             except socket.error:
-                pass
+                time.sleep(60)
         return "sucess1"
 
     def create(self,filename,req):
@@ -57,6 +57,7 @@ class server:
                         if response == "sucess2":
                             break
                     except socket.error:
+                        time.sleep(60)
                         response = self.writetochild(storage_path, filename, req)
         else:
             self.on_child_sucess1()
