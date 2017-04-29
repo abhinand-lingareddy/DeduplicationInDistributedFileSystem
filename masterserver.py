@@ -30,6 +30,16 @@ class server:
             response = server.prepare_response(200)
             sendlib.write_socket(self.clientsocket, response)
 
+    def writetochild(self,storage_path,filename,req):
+        while(True and self.elect.child is not None):
+            try:
+                filesendlib.sendfile(storage_path + filename, self.elect.child.s, req)
+                response = sendlib.read_socket(self.elect.child.s)
+                if response=="sucess1":
+                    break
+            except socket.error:
+                pass
+        return "sucess1"
 
     def create(self,filename,req):
         filesendlib.recvfile(self.storage_path,filename,self.clientsocket)
@@ -38,13 +48,16 @@ class server:
 
         if self.elect.child is not None:
             storage_path = filesendlib.storagepathprefix(self.storage_path)
-            filesendlib.sendfile(storage_path+filename, self.elect.child.s, req)
-            response = sendlib.read_socket(self.elect.child.s)
+            response=self.writetochild(storage_path,filename,req)
             if response=="sucess1":
                 self.on_child_sucess1()
-            response = sendlib.read_socket(self.elect.child.s)
-            if response=="sucess2":
-                pass
+            while True and self.elect.child is not None:
+                    try:
+                        response = sendlib.read_socket(self.elect.child.s)
+                        if response == "sucess2":
+                            break
+                    except socket.error:
+                        response = self.writetochild(storage_path, filename, req)
         else:
             self.on_child_sucess1()
 

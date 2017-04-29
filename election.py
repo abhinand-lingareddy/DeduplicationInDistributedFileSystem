@@ -42,7 +42,7 @@ class election:
     def get_key(self,num):
         return self.path+str(num).zfill(10)
 
-    def my_func(self,data, stat):
+    def watch_parent(self, data, stat):
         print "watching parent"
         if stat is None:
             print "called for parent" + str(data)
@@ -51,7 +51,7 @@ class election:
                 self.is_master = True
             else:
                 print "parent " + self.parentkey
-                kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.my_func)
+                kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.watch_parent)
             return False
 
 
@@ -117,7 +117,7 @@ class election:
                 self.is_master=True
             else:
                 self.is_master = False
-                kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.my_func)
+                kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.watch_parent)
             child_key=self.get_key(self.childnum)
             kazoo.recipe.watchers.DataWatch(self.zk,child_key , func=self.watch_child)
 
