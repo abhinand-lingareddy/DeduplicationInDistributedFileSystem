@@ -64,9 +64,8 @@ class server:
 
 
     def read(self,filename):
-        response={}
-        response["status"]=200
-        if filesendlib.sendfile(self.storage_path+"/"+filename,self.clientsocket,str(response)):
+        response=self.prepare_response(200)
+        if filesendlib.sendfile(self.storage_path+"/"+filename,self.clientsocket,response):
             return None
         else:
             return 404
@@ -93,25 +92,28 @@ class server:
 
 
     def handle_client(self):
-        while(1):
-            req = sendlib.read_socket(self.clientsocket)
-            print req
-            jp=jsonParser(req)
-            operation=jp.getValue("operation")
-            filename=jp.getValue("file_name")
+        try:
+            while(1):
+                req = sendlib.read_socket(self.clientsocket)
+                print req
+                jp=jsonParser(req)
+                operation=jp.getValue("operation")
+                filename=jp.getValue("file_name")
 
-            if operation=="CREATE":
-                result=self.create(filename,req)
-            elif operation=="READ":
-                result=self.read(filename)
-            elif operation=="EXIT":
-                self.close()
-                break
+                if operation=="CREATE":
+                    result=self.create(filename,req)
+                elif operation=="READ":
+                    result=self.read(filename)
+                elif operation=="EXIT":
+                    self.close()
+                    break
 
 
-            if result is not None:
-                response=server.prepare_response(result)
-                sendlib.write_socket(self.clientsocket,response)
+                if result is not None:
+                    response=server.prepare_response(result)
+                    sendlib.write_socket(self.clientsocket,response)
+        except Exception as e:
+            print str(e)
 
 
 

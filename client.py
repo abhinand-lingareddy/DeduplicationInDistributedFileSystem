@@ -40,23 +40,27 @@ class client:
 
 if __name__ == '__main__':
     host = socket.gethostname()
-    port = 59440
+    port = 49830
+
     c=client(host,port)
 
     while(1):
-        print("1.Create")
-        print("2.Read")
-        print("5.Exit")
-        x = input("Enter a number")
+        try:
+            print("1.Create")
+            print("2.Read")
+            print("5.Exit")
+            x = input("Enter a number")
 
-        if(x==1):
-            file_name=raw_input("enter filename")
-            file_path=raw_input("enter filepath")
-            c.create(file_name,file_path)
-        elif(x==2):
-            file_name=raw_input("enter filename")
-            c.read(file_name)
-        #exit operation
+            if(x==1):
+                file_name=raw_input("enter filename")
+                file_path=raw_input("enter filepath")
+                c.create(file_name,file_path)
+            elif(x==2):
+                file_name=raw_input("enter filename")
+                c.read(file_name)
+            #exit operation
+        except NameError:
+            print "invalid inputs"
 
     c.close()
 
