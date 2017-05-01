@@ -9,6 +9,7 @@ import kazoo
 from kazoo.client import KazooClient
 import election
 import time
+import os
 
 class server:
     def __init__(self,host,port,storage_path,elect):
@@ -27,7 +28,7 @@ class server:
         if not self.elect.getmaster():
             sendlib.write_socket(self.clientsocket, "sucess2")
         else:
-            response = server.prepare_response(200)
+            response = self.prepare_response(200)
             sendlib.write_socket(self.clientsocket, response)
 
     def writetochild(self,storage_path,filename,req):
@@ -70,9 +71,16 @@ class server:
         else:
             return 404
 
+    def list(self):
+        result=self.response_dic(200)
+        if os.path.exists(storage_path):
+            result["files"] = os.listdir(self.storage_path)
+        else:
+            result["files"] = []
+        sendlib.write_socket(self.clientsocket,str(result))
 
-    @staticmethod
-    def prepare_response(result):
+
+    def response_dic(self,result):
         code = {
             200:
                 "OK",
@@ -82,11 +90,15 @@ class server:
                 "Not Found",
         }
 
-        status=result
-        response={}
-        response["status"]=status
-        response["message"]=code[status]
+        status = result
+        response = {}
+        response["status"] = status
+        response["message"] = code[status]
 
+        return response
+
+    def prepare_response(self,result):
+        response=self.response_dic(result)
         return str(response)
 
 
@@ -98,19 +110,23 @@ class server:
                 print req
                 jp=jsonParser(req)
                 operation=jp.getValue("operation")
-                filename=jp.getValue("file_name")
+
 
                 if operation=="CREATE":
+                    filename = jp.getValue("file_name")
                     result=self.create(filename,req)
                 elif operation=="READ":
+                    filename = jp.getValue("file_name")
                     result=self.read(filename)
+                elif operation=="LIST":
+                    result = self.list()
                 elif operation=="EXIT":
                     self.close()
                     break
 
 
                 if result is not None:
-                    response=server.prepare_response(result)
+                    response=self.prepare_response(result)
                     sendlib.write_socket(self.clientsocket,response)
         except Exception as e:
             print str(e)
