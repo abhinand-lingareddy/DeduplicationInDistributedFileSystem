@@ -9,58 +9,77 @@ from stat import S_IFDIR, S_IFLNK, S_IFREG
 from sys import argv, exit
 from time import time
 
+import socket
+from client import client
+
+
+
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
-if not hasattr(__builtins__, 'bytes'):
-    bytes = str
 
 class Memory(LoggingMixIn, Operations):
     'Example memory filesystem. Supports only one level of files.'
 
-    def __init__(self):
-        self.files = {}
-        self.data = defaultdict(bytes)
+    def __init__(self,host,port):
+        self.host=host
+        self.port=port
         self.fd = 0
+        self.operation={}
+        self.tempclient=client(host,port)
+        self.client={}
         now = time()
-        self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
+        self.files={}
+        self.files[''] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
 
+
     def chmod(self, path, mode):
-        self.files[path]['st_mode'] &= 0o770000
-        self.files[path]['st_mode'] |= mode
+        #print("not implemented 1")
         return 0
 
     def chown(self, path, uid, gid):
-        self.files[path]['st_uid'] = uid
-        self.files[path]['st_gid'] = gid
+        pass
+        #print("not implemented 2")
+
+
+    def getpath(self,path):
+        if path[0]=="/":
+            return path[1:]
+        else:
+            return path
+
 
     def create(self, path, mode):
-        self.files[path] = dict(st_mode=(S_IFREG | mode), st_nlink=1,
-                                st_size=0, st_ctime=time(), st_mtime=time(),
-                                st_atime=time())
-
         self.fd += 1
+        self.operation[self.fd] = "create"
+        self.client[self.fd] = client(host, port)
+        path=self.getpath(path)
+        #print("called send metadata for"+path)50991
+        meta=self.client[self.fd].sendmetadata(path)
+
+        self.files[path] = meta
         return self.fd
 
     def getattr(self, path, fh=None):
+        path = self.getpath(path)
+        #print("getattr "+path)
         if path not in self.files:
             raise FuseOSError(ENOENT)
 
         return self.files[path]
 
-    def getxattr(self, path, name, position=0):
-        attrs = self.files[path].get('attrs', {})
 
-        try:
-            return attrs[name]
-        except KeyError:
-            return ''       # Should return ENOATTR
+    def getxattr(self, path, name, position=0):
+        #print("not implemented 3")
+        return ''
 
     def listxattr(self, path):
+        #print("not implemented 4")
         attrs = self.files[path].get('attrs', {})
         return attrs.keys()
 
     def mkdir(self, path, mode):
+        #print("not implemented 5")
         self.files[path] = dict(st_mode=(S_IFDIR | mode), st_nlink=2,
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
@@ -69,18 +88,40 @@ class Memory(LoggingMixIn, Operations):
 
     def open(self, path, flags):
         self.fd += 1
+        self.operation[self.fd] = "read"
+        self.client[self.fd] = client(host, port)
+        path = self.getpath(path)
+        self.files[path] = self.client[self.fd].openforreadmeta(path)
         return self.fd
 
     def read(self, path, size, offset, fh):
-        return self.data[path][offset:offset + size]
+        path = self.getpath(path)
+        #print("not implemented read")
+        #return self.data[path][offset:offset + size]
+        data=self.client[fh].s.recv(size)
+        #print(data)
+        #print("size "+str(size)+" got size "+str(len(data)))
+        if data[-1]!='~':
+            return data
+        else:
+            return data[:-1]
 
     def readdir(self, path, fh):
-        return ['.', '..'] + [x[1:] for x in self.files if x != '/']
+
+
+            l=self.tempclient.list()
+            #print(str(l))
+            l.extend(['.', '..'])
+            return l
+
 
     def readlink(self, path):
+        path = self.getpath(path)
+        #print("read link called "+path)
         return self.data[path]
 
     def removexattr(self, path, name):
+        #print("not implemented 6")
         attrs = self.files[path].get('attrs', {})
 
         try:
@@ -89,49 +130,65 @@ class Memory(LoggingMixIn, Operations):
             pass        # Should return ENOATTR
 
     def rename(self, old, new):
+        #print("not implemented 7")
         self.files[new] = self.files.pop(old)
 
     def rmdir(self, path):
+        #print("not implemented 8")
         self.files.pop(path)
         self.files['/']['st_nlink'] -= 1
 
     def setxattr(self, path, name, value, options, position=0):
+        #print("not implemented 9")
         # Ignore options
         attrs = self.files[path].setdefault('attrs', {})
         attrs[name] = value
 
     def statfs(self, path):
-        return dict(f_bsize=512, f_blocks=4096, f_bavail=2048)
+        return dict(f_bsize=1024, f_blocks=409600, f_bavail=204800)
 
     def symlink(self, target, source):
+        #print("not implemented 10")
         self.files[target] = dict(st_mode=(S_IFLNK | 0o777), st_nlink=1,
                                   st_size=len(source))
 
         self.data[target] = source
 
     def truncate(self, path, length, fh=None):
+        #print("not implemented 11")
         self.data[path] = self.data[path][:length]
         self.files[path]['st_size'] = length
 
     def unlink(self, path):
+        #print("not implemented unlink")
         self.files.pop(path)
 
     def utimens(self, path, times=None):
-        now = time()
-        atime, mtime = times if times else (now, now)
-        self.files[path]['st_atime'] = atime
-        self.files[path]['st_mtime'] = mtime
+        #print("not implemented utimens")
+        pass
 
     def write(self, path, data, offset, fh):
-        self.data[path] = self.data[path][:offset] + data
-        self.files[path]['st_size'] = len(self.data[path])
+        #print("write called with data len"+str(len(data)))
+        self.client[fh].s.send(data)
         return len(data)
+
+    def flush(self, path, fh):
+        #print("flush called with data len")
+        if self.operation[fh]=="create":
+            self.client[fh].s.send("~")
+            self.client[fh].readresponse()
+        self.operation.pop(fh, None)
+        self.client[fh].close()
+        self.client.pop(fh,None)
+        return 0
 
 
 if __name__ == '__main__':
-    if len(argv) != 2:
-        print('usage: %s <mountpoint>' % argv[0])
-        exit(1)
 
     logging.basicConfig(level=logging.DEBUG)
-    fuse = FUSE(Memory(), argv[1],nothreads=True, foreground=True)
+    host = socket.gethostname()
+    port = 50992
+
+
+
+    fuse = FUSE(Memory(host, port), "/home/abhinand/test",nothreads=True, foreground=True)

@@ -13,6 +13,8 @@ def bytes_to_no(b):
 
 def read_socket(soc):
     length=soc.recv(4)
+    if(len(length)==0):
+        return None
     length=bytes_to_no(length)
 
     i=0
