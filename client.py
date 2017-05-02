@@ -1,9 +1,8 @@
 import socket
 import filesendlib
 import sendlib
-import os
 from time import time
-from stat import S_IFDIR, S_IFLNK, S_IFREG
+from stat import  S_IFREG
 from myparser import jsonParser
 
 class client:
@@ -42,7 +41,7 @@ class client:
 
     def create(self,file_name,file_path):
         self.sendmetadata(file_name)
-        filesendlib.send_file(file_path, s/home/abhinand/sameer.cc/home/abhinand/sameer.ccelf.s)
+        filesendlib.send_file(file_path, self.s)
         self.readresponse()
 
     def openforreadresponse(self,file_name):

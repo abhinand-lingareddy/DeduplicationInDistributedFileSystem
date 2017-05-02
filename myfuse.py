@@ -3,10 +3,9 @@ from __future__ import print_function, absolute_import, division
 
 import logging
 
-from collections import defaultdict
 from errno import ENOENT
-from stat import S_IFDIR, S_IFLNK, S_IFREG
-from sys import argv, exit
+from stat import S_IFDIR, S_IFLNK
+
 from time import time
 
 import socket
@@ -18,7 +17,7 @@ from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
 class Memory(LoggingMixIn, Operations):
-    'Example memory filesystem. Supports only one level of files.'
+    'In Memory Client'
 
     def __init__(self,host,port):
         self.host=host
@@ -35,12 +34,11 @@ class Memory(LoggingMixIn, Operations):
 
 
     def chmod(self, path, mode):
-        #print("not implemented 1")
         return 0
 
     def chown(self, path, uid, gid):
         pass
-        #print("not implemented 2")
+
 
 
     def getpath(self,path):
@@ -55,18 +53,14 @@ class Memory(LoggingMixIn, Operations):
         self.operation[self.fd] = "create"
         self.client[self.fd] = client(host, port)
         path=self.getpath(path)
-        #print("called send metadata for"+path)50991
         self.client[self.fd].sendmetadata(path)
         self.l.append(path)
-
-
         return self.fd
 
     def getattr(self, path, fh=None):
         if path == '/':
             return self.files['/']
         path = self.getpath(path)
-        #print("getattr "+path)
         if path not in self.l:
             raise FuseOSError(ENOENT)
         meta=self.tempclient.getmetadata(path)
@@ -76,20 +70,16 @@ class Memory(LoggingMixIn, Operations):
 
 
     def getxattr(self, path, name, position=0):
-        #print("not implemented 3")
         return ''
 
     def listxattr(self, path):
-        #print("not implemented 4")
         attrs = self.files[path].get('attrs', {})
         return attrs.keys()
 
     def mkdir(self, path, mode):
-        #print("not implemented 5")
         self.files[path] = dict(st_mode=(S_IFDIR | mode), st_nlink=2,
                                 st_size=0, st_ctime=time(), st_mtime=time(),
                                 st_atime=time())
-
         self.files['/']['st_nlink'] += 1
 
     def open(self, path, flags):
@@ -102,52 +92,38 @@ class Memory(LoggingMixIn, Operations):
 
     def read(self, path, size, offset, fh):
         path = self.getpath(path)
-        #print("not implemented read")
-        #return self.data[path][offset:offset + size]
         data=self.client[fh].s.recv(size)
-        #print(data)
-        #print("size "+str(size)+" got size "+str(len(data)))
         if data[-1]!='~':
             return data
         else:
             return data[:-1]
 
     def readdir(self, path, fh):
-
-
-            l=self.tempclient.list()
-            #print(str(l))
-            l.extend(['.', '..'])
-            self.l=l
-            return l
+        l=self.tempclient.list()
+        l.extend(['.', '..'])
+        self.l=l
+        return l
 
 
     def readlink(self, path):
         path = self.getpath(path)
-        #print("read link called "+path)
         return self.data[path]
 
     def removexattr(self, path, name):
-        #print("not implemented 6")
         attrs = self.files[path].get('attrs', {})
-
         try:
             del attrs[name]
         except KeyError:
             pass        # Should return ENOATTR
 
     def rename(self, old, new):
-        #print("not implemented 7")
         self.files[new] = self.files.pop(old)
 
     def rmdir(self, path):
-        #print("not implemented 8")
         self.files.pop(path)
         self.files['/']['st_nlink'] -= 1
 
     def setxattr(self, path, name, value, options, position=0):
-        #print("not implemented 9")
-        # Ignore options
         attrs = self.files[path].setdefault('attrs', {})
         attrs[name] = value
 
@@ -155,32 +131,25 @@ class Memory(LoggingMixIn, Operations):
         return dict(f_bsize=1024, f_blocks=409600, f_bavail=204800)
 
     def symlink(self, target, source):
-        #print("not implemented 10")
         self.files[target] = dict(st_mode=(S_IFLNK | 0o777), st_nlink=1,
                                   st_size=len(source))
-
         self.data[target] = source
 
     def truncate(self, path, length, fh=None):
-        #print("not implemented 11")
         self.data[path] = self.data[path][:length]
         self.files[path]['st_size'] = length
 
     def unlink(self, path):
-        #print("not implemented unlink")
         self.files.pop(path)
 
     def utimens(self, path, times=None):
-        #print("not implemented utimens")
         pass
 
     def write(self, path, data, offset, fh):
-        #print("write called with data len"+str(len(data)))
         self.client[fh].s.send(data)
         return len(data)
 
     def flush(self, path, fh):
-        #print("flush called with data len")
         if self.operation[fh]=="create":
             self.client[fh].s.send("~")
             self.client[fh].readresponse()
