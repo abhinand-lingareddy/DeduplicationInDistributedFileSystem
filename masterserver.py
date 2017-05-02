@@ -5,7 +5,6 @@ import sendlib
 import threading
 import filesendlib
 import random
-import kazoo
 from kazoo.client import KazooClient
 from client import client
 import election
@@ -21,6 +20,7 @@ class server:
         self.storage_path=storage_path
         self.elect=elect
         self.meta=meta
+        self.no_dedupe_servers=2
 
     def accept(self):
         c, addr =self.serversocket.accept()
@@ -50,14 +50,14 @@ class server:
                 time.sleep(60)
         return "sucess1"
 
-    def create(self,filename,req,threadclientsocket):
+    def create(self,filename,req,threadclientsocket,hopcount):
         filesendlib.recvfile(self.storage_path,filename,threadclientsocket)
         if not self.elect.getmaster():
             sendlib.write_socket(threadclientsocket,"sucess1")
 
         childclient=self.getchildclient()
 
-        if childclient is not None:
+        if hopcount>0 and childclient is not None:
             storage_path = filesendlib.storagepathprefix(self.storage_path)
             response=self.writetochild(storage_path,filename,req,childclient)
             if response=="sucess1":
@@ -143,12 +143,18 @@ class server:
                 print req
                 jp=jsonParser(req)
                 operation=jp.getValue("operation")
-
-
                 if operation=="CREATE":
                     filename = jp.getValue("file_name")
                     self.write_meta(filename,jp)
-                    self.create(filename,req,threadclientsocket)
+                    if not jp.has("hopcount"):
+                        hopcount=self.no_dedupe_servers
+                    else:
+                        hopcount=jp.getValue("hopcount")-1
+                    if hopcount>0:
+                        respdic=jp.getdic()
+                        respdic["hopcount"]=hopcount
+                        req=str(respdic)
+                    self.create(filename,req,threadclientsocket,hopcount)
                     storagepath=filesendlib.storagepathprefix(self.storage_path)
                     size=os.path.getsize(storagepath+filename)
                     self.meta[filename]["st_size"]=size

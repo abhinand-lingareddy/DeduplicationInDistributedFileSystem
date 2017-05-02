@@ -194,7 +194,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 50992
+    port = 58243
 
 
 
