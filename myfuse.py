@@ -24,12 +24,13 @@ class Memory(LoggingMixIn, Operations):
         self.host=host
         self.port=port
         self.fd = 0
+        self.l=[]
         self.operation={}
         self.tempclient=client(host,port)
         self.client={}
         now = time()
         self.files={}
-        self.files[''] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
+        self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
 
 
@@ -55,18 +56,23 @@ class Memory(LoggingMixIn, Operations):
         self.client[self.fd] = client(host, port)
         path=self.getpath(path)
         #print("called send metadata for"+path)50991
-        meta=self.client[self.fd].sendmetadata(path)
+        self.client[self.fd].sendmetadata(path)
+        self.l.append(path)
 
-        self.files[path] = meta
+
         return self.fd
 
     def getattr(self, path, fh=None):
+        if path == '/':
+            return self.files['/']
         path = self.getpath(path)
         #print("getattr "+path)
-        if path not in self.files:
+        if path not in self.l:
             raise FuseOSError(ENOENT)
-
-        return self.files[path]
+        meta=self.tempclient.getmetadata(path)
+        if meta is None:
+            raise FuseOSError(ENOENT)
+        return  meta
 
 
     def getxattr(self, path, name, position=0):
@@ -91,7 +97,7 @@ class Memory(LoggingMixIn, Operations):
         self.operation[self.fd] = "read"
         self.client[self.fd] = client(host, port)
         path = self.getpath(path)
-        self.files[path] = self.client[self.fd].openforreadmeta(path)
+        self.client[self.fd].openforreadmeta(path)
         return self.fd
 
     def read(self, path, size, offset, fh):
@@ -112,6 +118,7 @@ class Memory(LoggingMixIn, Operations):
             l=self.tempclient.list()
             #print(str(l))
             l.extend(['.', '..'])
+            self.l=l
             return l
 
 
@@ -191,4 +198,4 @@ if __name__ == '__main__':
 
 
 
-    fuse = FUSE(Memory(host, port), "/home/abhinand/test",nothreads=True, foreground=True)
+    fuse = FUSE(Memory(host, port), "/home/abhinand/test2",nothreads=True, foreground=True)

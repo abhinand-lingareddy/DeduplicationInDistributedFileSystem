@@ -22,6 +22,18 @@ class client:
         sendlib.write_socket(self.s, str(request))
         return meta
 
+    def getmetadata(self,filename):
+        request = {}
+        request["file_name"] = filename
+        request["operation"] = "META"
+        sendlib.write_socket(self.s, str(request))
+        response = sendlib.read_socket(self.s)
+        print "meta"+response
+        if response=="ENOENT":
+            return None
+        meta = jsonParser(response)
+        return meta.getdic()
+
 
 
     def readresponse(self):
@@ -30,7 +42,7 @@ class client:
 
     def create(self,file_name,file_path):
         self.sendmetadata(file_name)
-        filesendlib.send_file(file_path, self.s)
+        filesendlib.send_file(file_path, s/home/abhinand/sameer.cc/home/abhinand/sameer.ccelf.s)
         self.readresponse()
 
     def openforreadresponse(self,file_name):

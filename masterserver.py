@@ -137,23 +137,31 @@ class server:
                 if operation=="CREATE":
                     filename = jp.getValue("file_name")
                     self.write_meta(filename,jp)
-                    result=self.create(filename,req,threadclientsocket)
+                    self.create(filename,req,threadclientsocket)
                     storagepath=filesendlib.storagepathprefix(self.storage_path)
                     size=os.path.getsize(storagepath+filename)
                     self.meta[filename]["st_size"]=size
+                    self.meta[filename]["st_ctime"]=time.time()
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
-                    result=self.read(filename,threadclientsocket)
+                    self.read(filename,threadclientsocket)
+                    self.meta[filename]["st_ctime"]=time.time()
                 elif operation=="LIST":
-                    result = self.list(threadclientsocket)
+                    self.list(threadclientsocket)
+                elif operation=="META":
+                    filename = jp.getValue("file_name")
+                    if filename in self.meta:
+                        sendlib.write_socket(threadclientsocket,str(self.meta[filename]))
+                    else:
+                        sendlib.write_socket(threadclientsocket,"ENOENT")
                 elif operation=="EXIT":
                     self.close()
                     break
 
 
-                if result is not None:
-                    response=self.prepare_response(result)
-                    sendlib.write_socket(threadclientsocket,response)
+               
+
+
         # except Exception as e:
         #     print str(e)
 
