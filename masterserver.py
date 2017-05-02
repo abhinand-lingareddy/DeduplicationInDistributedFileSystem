@@ -7,6 +7,7 @@ import filesendlib
 import random
 import kazoo
 from kazoo.client import KazooClient
+from client import client
 import election
 import time
 import os
@@ -25,6 +26,12 @@ class server:
         c, addr =self.serversocket.accept()
         return c
 
+    def getchildclient(self):
+        if self.elect.childinfo is not None:
+            host = self.elect.childinfo[:self.elect.childinfo.index(',')]
+            port = int(self.elect.childinfo[self.elect.childinfo.index(',') + 1:])
+            return client(host, port)
+
     def on_child_sucess1(self,threadclientsocket):
         if not self.elect.getmaster():
             sendlib.write_socket(threadclientsocket, "sucess2")
@@ -32,11 +39,11 @@ class server:
             response = self.prepare_response(200)
             sendlib.write_socket(threadclientsocket, response)
 
-    def writetochild(self,storage_path,filename,req):
-        while(True and self.elect.child is not None):
+    def writetochild(self,storage_path,filename,req,childclient):
+        while(True and childclient is not None):
             try:
-                filesendlib.sendmetadataandfile(storage_path + filename, self.elect.child.s, req)
-                response = sendlib.read_socket(self.elect.child.s)
+                filesendlib.sendmetadataandfile(storage_path + filename, childclient.s, req)
+                response = sendlib.read_socket(childclient.s)
                 if response=="sucess1":
                     break
             except socket.error:
@@ -48,19 +55,23 @@ class server:
         if not self.elect.getmaster():
             sendlib.write_socket(threadclientsocket,"sucess1")
 
-        if self.elect.child is not None:
+        childclient=self.getchildclient()
+
+        if childclient is not None:
             storage_path = filesendlib.storagepathprefix(self.storage_path)
-            response=self.writetochild(storage_path,filename,req)
+            response=self.writetochild(storage_path,filename,req,childclient)
             if response=="sucess1":
                 self.on_child_sucess1(threadclientsocket)
-            while True and self.elect.child is not None:
+            while True and childclient is not None:
                     try:
-                        response = sendlib.read_socket(self.elect.child.s)
+
+                        response = sendlib.read_socket(childclient.s)
                         if response == "sucess2":
+                            childclient.close()
                             break
                     except socket.error:
                         time.sleep(60)
-                        response = self.writetochild(storage_path, filename, req)
+                        response = self.writetochild(storage_path, filename, req,childclient)
         else:
             self.on_child_sucess1(threadclientsocket)
 
@@ -178,8 +189,7 @@ if __name__ == '__main__':
 
     leader_path="/leader"
 
-    #peer_socket = random.randrange(49152, 65535)
-    peer_socket=50992
+    peer_socket = random.randrange(49152, 65535)
 
     zk = KazooClient(hosts='127.0.0.1:2181')
 

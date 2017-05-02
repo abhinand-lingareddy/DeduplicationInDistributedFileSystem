@@ -1,4 +1,4 @@
-from client import client
+
 import kazoo
 from kazoo.client import KazooState
 
@@ -23,7 +23,7 @@ class election:
         self.path=path
         self.value=value
         self.is_master=False
-        self.child=None
+        self.childinfo=None
         zk.add_listener(self.stat_listener)
 
 
@@ -58,19 +58,16 @@ class election:
     def watch_child(self,data, stat):
         print "watch child"
         if stat is None :
-            if self.child is not None:
+            if self.childinfo is not None:
                 lock = self.zk.Lock("/lockpath", self.value)
                 with lock:
                     status,child_key=self.find_child()
                     if not status:
-                        self.child=None
+                        self.childinfo=None
                     print "watching child"+child_key
                     kazoo.recipe.watchers.DataWatch(self.zk, child_key, func=self.watch_child)
         else:
-            print "my child "+data
-            host=data[:data.index(',')]
-            port=int(data[data.index(',')+1:])
-            self.child=client(host,port)
+            self.childinfo=data
             print self.childnum
 
 
