@@ -10,6 +10,7 @@ from client import client
 import election
 import time
 import os
+import dedupe
 
 class server:
     def __init__(self,host,port,storage_path,elect,meta):
@@ -21,6 +22,7 @@ class server:
         self.elect=elect
         self.meta=meta
         self.no_dedupe_servers=2
+        self.ds=dedupe.deduplication(dedupepath=storage_path)
 
     def accept(self):
         c, addr =self.serversocket.accept()
@@ -42,7 +44,7 @@ class server:
     def writetochild(self,storage_path,filename,req,childclient):
         while(True and childclient is not None):
             try:
-                filesendlib.sendmetadataandfile(storage_path + filename, childclient.s, req)
+                filesendlib.sendrequestandfile(filesendlib.storagepathprefix(storage_path) , filename, childclient.s, req,self.ds)
                 response = sendlib.read_socket(childclient.s)
                 if response=="sucess1":
                     break
@@ -82,7 +84,7 @@ class server:
         if  meta is None:
             return 404
         response["meta"]=meta
-        filesendlib.sendmetadataandfile(self.storage_path + "/" + filename, threadclientsocket, str(response))
+        filesendlib.sendrequestandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket, str(response),self.ds)
 
     def list(self,threadclientsocket):
         result=self.response_dic(200)
@@ -90,6 +92,9 @@ class server:
         if os.path.exists(storage_path):
             files = [file for file in os.listdir(self.storage_path)
                      if os.path.isfile(os.path.join(self.storage_path, file))]
+            for i in range(len(files)):
+                if files[i].endswith("._temp"):
+                    files[i]=files[i][:len("._temp")*-1]
             result["files"] = files
         else:
             result["files"] = []
@@ -155,8 +160,11 @@ class server:
                         respdic["hopcount"]=hopcount
                         req=str(respdic)
                     self.create(filename,req,threadclientsocket,hopcount)
+
                     storagepath=filesendlib.storagepathprefix(self.storage_path)
                     size=os.path.getsize(storagepath+filename)
+                    self.ds.write(filename)
+                    os.remove(storagepath+filename)
                     self.meta[filename]["st_size"]=size
                     self.meta[filename]["st_ctime"]=time.time()
                 elif operation=="READ":
@@ -207,7 +215,6 @@ if __name__ == '__main__':
 
     if not os.path.exists(storage_path):
         os.makedirs(storage_path)
-        os.makedirs(storage_path+"/meta")
 
     host=socket.gethostname()
 

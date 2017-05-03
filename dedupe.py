@@ -12,7 +12,7 @@ class dedupewritevariables():
 
 
 class deduplication():
-    def __init__(self,windowSize=10,Q=11497,D=256,boundary_marker=10,boundary=1,dedupehashes=""):
+    def __init__(self, windowSize=10, Q=11497, D=256, boundary_marker=10, boundary=1, dedupepath=""):
         self.windowSize=windowSize#10
         self.Q=Q#11497
         self.D=D#256
@@ -22,7 +22,10 @@ class deduplication():
         boundary -= 1
         self.boundary=boundary
         self.pow=self.compute_RM(self.windowSize, self.D, 1, self.Q)
-        self.dedupehashes=dedupehashes
+        if dedupepath!="":
+            self.dedupepath=dedupepath+"//"
+        else:
+            self.dedupepath = dedupepath
 
     def compute_RM(self,len, R, RM, Q):
         for i in range(1, len):
@@ -47,9 +50,7 @@ class deduplication():
 
     def createHashPath(self,hash):
         path = ""
-        if self.dedupehashes!="":
-            path += self.dedupehashes
-            path += "//"
+        path += self.dedupepath
         path += hash[0:2]
         path += "//"
         path += hash[2:6]
@@ -83,20 +84,18 @@ class deduplication():
             file.close()
 
     def processChunk(self,currentFile,start, end,chunk):
-
         hash = hashlib.sha1(''.join(chunk).encode('utf-8')).hexdigest()
         self.createChunkFile(chunk, hash)
-        tempFile = currentFile + "._temp"
+        tempFile = self.dedupepath+currentFile + "._temp"
         content = str(start) + " " + str(end) + " " + str(end - start) + " " + str(hash) + "\n"
         file = open(tempFile, "a+")
         file.write(content)
         file.close()
 
     def read(self,currentFile):
-        hashfile = currentFile + "._temp"
-        file = currentFile + "._built"
+        hashfile = self.dedupepath+currentFile + "._temp"
         hf = open(hashfile, "r")
-        f = open(file, "w")
+        actualdata=[]
         while True:
             line = hf.readline()
             if not line:
@@ -106,13 +105,13 @@ class deduplication():
             path = self.createHashPath(hash)
             path += "//data.txt"
             data = open(path, "r")
-            f.write(data.read())
+            actualdata.append(data.read())
             data.close()
-        f.close()
+        return "".join(actualdata)
 
     def write(self,currentFile):
         sig=0
-        f = open(currentFile, 'r')
+        f = open(self.dedupepath+currentFile, 'r')
         dv=dedupewritevariables()
         for i in range(0, self.windowSize):
             c = f.read(1)
@@ -157,7 +156,3 @@ class deduplication():
         f.close()
         return 1
 
-d=deduplication()
-filename=raw_input("enter filename")
-d.write(filename)
-d.read(filename)

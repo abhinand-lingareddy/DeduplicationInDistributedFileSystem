@@ -64,9 +64,24 @@ def send_file(file_path, s):
     f.close()
     print "Done Sending"
     #s.shutdown(socket.SHUT_WR)
+def send_fromdedupe(file_name,s,ds):
+    content=ds.read(file_name)
+    i=0
+    print "deduplicated content "+content
+    for i in range(0,len(content)+1,1024):
+        if i+1024<=len(content):
+            s.send(content[i:i+1024])
+        else:
+            s.send(content[i:]+"~")
+    print "Done Sending"
 
-def sendmetadataandfile(file_path, s, ack):
+def sendrequestandfile(storagepath,file_name, s, ack,ds):
     sendlib.write_socket(s, ack)
-    send_file(file_path, s)
+    if os.path.isfile(storagepath+file_name):
+        send_file(storagepath + file_name, s)
+    else:
+        send_fromdedupe(file_name, s, ds)
+
+
 
 
