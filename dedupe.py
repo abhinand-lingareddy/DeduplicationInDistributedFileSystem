@@ -108,6 +108,9 @@ class deduplication():
             actualdata.append(data.read())
             data.close()
         return "".join(actualdata)
+    def actualfileexits(self,currentFile):
+        return os.path.isfile(self.dedupepath+currentFile)
+
 
     def write(self,currentFile):
         sig=0

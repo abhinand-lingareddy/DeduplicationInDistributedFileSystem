@@ -16,8 +16,8 @@ from client import client
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
-class Memory(LoggingMixIn, Operations):
-    'In Memory Client'
+class RemoteFileSystem(LoggingMixIn, Operations):
+    'using non persistant memory'
 
     def __init__(self,host,port):
         self.host=host
@@ -164,8 +164,8 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 54114
+    port = 57257
 
 
 
-    fuse = FUSE(Memory(host, port), "/home/abhinand/test2",nothreads=True, foreground=True)
+    fuse = FUSE(RemoteFileSystem(host, port), "/home/abhinand/test2", nothreads=True, foreground=True)

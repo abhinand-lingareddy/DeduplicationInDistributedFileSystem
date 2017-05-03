@@ -6,14 +6,17 @@ import threading
 import filesendlib
 import random
 from kazoo.client import KazooClient
+from kazoo.exceptions import NodeExistsError
 from client import client
 import election
 import time
 import os
 import dedupe
+from threading import Lock
+
 
 class server:
-    def __init__(self,host,port,storage_path,elect,meta):
+    def __init__(self,host,port,storage_path,elect,meta,zk):
         s = socket.socket()
         s.bind((host, port))
         s.listen(5)
@@ -21,8 +24,15 @@ class server:
         self.storage_path=storage_path
         self.elect=elect
         self.meta=meta
-        self.no_dedupe_servers=2
+        self.zk=zk
+        self.no_dedupe_servers=2 #no of deduplication servers, used only when this is the master node
+        self.isdedupeserver=False
+        self.lock= Lock()
         self.ds=dedupe.deduplication(dedupepath=storage_path)
+
+    #todo
+    def getname(self):
+        pass
 
     def accept(self):
         c, addr =self.serversocket.accept()
@@ -34,10 +44,11 @@ class server:
             port = int(self.elect.childinfo[self.elect.childinfo.index(',') + 1:])
             return client(host, port)
 
-    def on_child_sucess1(self,threadclientsocket):
-        if not self.elect.getmaster():
+    def on_child_sucess1(self,filename,threadclientsocket):
+        if not self.elect.ismaster():
             sendlib.write_socket(threadclientsocket, "sucess2")
         else:
+            self.zk.create("dedupequeue/" + filename, str(self.storage_path))
             response = self.prepare_response(200)
             sendlib.write_socket(threadclientsocket, response)
 
@@ -54,7 +65,7 @@ class server:
 
     def create(self,filename,req,threadclientsocket,hopcount):
         filesendlib.recvfile(self.storage_path,filename,threadclientsocket)
-        if not self.elect.getmaster():
+        if not self.elect.ismaster():
             sendlib.write_socket(threadclientsocket,"sucess1")
 
         childclient=self.getchildclient()
@@ -63,7 +74,7 @@ class server:
             storage_path = filesendlib.storagepathprefix(self.storage_path)
             response=self.writetochild(storage_path,filename,req,childclient)
             if response=="sucess1":
-                self.on_child_sucess1(threadclientsocket)
+                self.on_child_sucess1(filename,threadclientsocket)
             while True and childclient is not None:
                     try:
                         response = sendlib.read_socket(childclient.s)
@@ -74,7 +85,10 @@ class server:
                         time.sleep(60)
                         response = self.writetochild(storage_path, filename, req,childclient)
         else:
-            self.on_child_sucess1(threadclientsocket)
+            self.on_child_sucess1(filename,threadclientsocket)
+
+
+
 
 
     def read(self,filename,threadclientsocket):
@@ -151,6 +165,21 @@ class server:
         self.meta[filename]["st_size"] = size
         self.meta[filename]["st_ctime"] = time.time()
 
+    def performdedupe(self):
+        while(True):
+            pending_files=self.zk.get_children("dedupequeue")
+            for file in pending_files:
+                if self.ds.actualfileexits(file):
+                    try:
+                        if zk.exists("dedupeserver/"+file) is None:
+                            zk.create("dedupeserver/"+file,str(self.storage_path),ephemeral=True,makepath=True)
+                            print "deduping file " + file
+                            self.ds.write(file)
+                            zk.delete("dedupequeue/"+file)
+                    except NodeExistsError:
+                        pass
+
+
     def handle_client(self,threadclientsocket):
         # try:
             while(1):
@@ -166,12 +195,20 @@ class server:
                     filename = jp.getValue("file_name")
                     self.store_meta_memory(filename, jp)
                     #hopcount- no of hops the actual file must be farwarded
-                    hopcount=self.gethopcount(jp)
-                    if hopcount>0:
-                        req=self.updatehopcountrequest(jp,hopcount)
-                    self.create(filename,req,threadclientsocket,hopcount)
+                    updatedhopcount=self.gethopcount(jp)
+                    if updatedhopcount>=0:
+                        req=self.updatehopcountrequest(jp,updatedhopcount)
+                        #extra check to avoid unnecessary locking
+                        if not self.isdedupeserver and not self.elect.ismaster():
+                            with self.lock:
+                                if not self.isdedupeserver:
+                                    print("this is a dedupeserver")
+                                    self.isdedupeserver=True
+                                    t = threading.Thread(target=self.performdedupe)
+                                    t.daemon = True
+                                    t.start()
+                    self.create(filename,req,threadclientsocket,updatedhopcount)
                     self.updatesize(filename)
-                    self.ds.write(filename)
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
                     self.read(filename,threadclientsocket)
@@ -202,6 +239,8 @@ class server:
 
 
 
+
+
 if __name__ == '__main__':
 
     #storage_path=raw_input("enter server name")
@@ -228,7 +267,7 @@ if __name__ == '__main__':
 
     meta={}
 
-    s1=server(host, peer_port, storage_path, e, meta)
+    s1=server(host, peer_port, storage_path, e, meta,zk)
 
 
 

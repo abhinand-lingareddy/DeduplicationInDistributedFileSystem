@@ -14,7 +14,7 @@ class election:
         else:
             print 'Unknown state'
 
-    def getmaster(self):
+    def ismaster(self):
         return self.is_master
 
 
