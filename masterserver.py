@@ -44,7 +44,7 @@ class server:
     def writetochild(self,storage_path,filename,req,childclient):
         while(True and childclient is not None):
             try:
-                filesendlib.sendrequestandfile(filesendlib.storagepathprefix(storage_path) , filename, childclient.s, req,self.ds)
+                filesendlib.sendresponseandfile(filesendlib.storagepathprefix(storage_path), filename, childclient.s, req, self.ds)
                 response = sendlib.read_socket(childclient.s)
                 if response=="sucess1":
                     break
@@ -66,7 +66,6 @@ class server:
                 self.on_child_sucess1(threadclientsocket)
             while True and childclient is not None:
                     try:
-
                         response = sendlib.read_socket(childclient.s)
                         if response == "sucess2":
                             childclient.close()
@@ -84,10 +83,9 @@ class server:
         if  meta is None:
             return 404
         response["meta"]=meta
-        filesendlib.sendrequestandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket, str(response),self.ds)
+        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket, str(response), self.ds)
 
     def list(self,threadclientsocket):
-        result=self.response_dic(200)
         result=self.response_dic(200)
         if os.path.exists(storage_path):
             files = [file for file in os.listdir(self.storage_path)
@@ -123,7 +121,7 @@ class server:
         return str(response)
 
 
-    def write_meta(self,filename,jp):
+    def store_meta_memory(self, filename, jp):
         self.meta[filename]=jp.getValue("meta")
       
 
@@ -135,12 +133,28 @@ class server:
 
 
 
+    def gethopcount(self,jp):
+        if not jp.has("hopcount"):
+            hopcount = self.no_dedupe_servers
+        else:
+            hopcount = jp.getValue("hopcount") - 1
+        return hopcount
+    def updatehopcountrequest(self,jp,hopcount):
+        respdic = jp.getdic()
+        respdic["hopcount"] = hopcount
+        req = str(respdic)
+        return req
 
-
+    def updatesize(self,filename):
+        storagepath = filesendlib.storagepathprefix(self.storage_path)
+        size = os.path.getsize(storagepath + filename)
+        self.meta[filename]["st_size"] = size
+        self.meta[filename]["st_ctime"] = time.time()
 
     def handle_client(self,threadclientsocket):
         # try:
             while(1):
+                #read request from client
                 req = sendlib.read_socket(threadclientsocket)
                 if(req is None):
                     threadclientsocket.close()
@@ -150,23 +164,14 @@ class server:
                 operation=jp.getValue("operation")
                 if operation=="CREATE":
                     filename = jp.getValue("file_name")
-                    self.write_meta(filename,jp)
-                    if not jp.has("hopcount"):
-                        hopcount=self.no_dedupe_servers
-                    else:
-                        hopcount=jp.getValue("hopcount")-1
+                    self.store_meta_memory(filename, jp)
+                    #hopcount- no of hops the actual file must be farwarded
+                    hopcount=self.gethopcount(jp)
                     if hopcount>0:
-                        respdic=jp.getdic()
-                        respdic["hopcount"]=hopcount
-                        req=str(respdic)
+                        req=self.updatehopcountrequest(jp,hopcount)
                     self.create(filename,req,threadclientsocket,hopcount)
-
-                    storagepath=filesendlib.storagepathprefix(self.storage_path)
-                    size=os.path.getsize(storagepath+filename)
+                    self.updatesize(filename)
                     self.ds.write(filename)
-                    os.remove(storagepath+filename)
-                    self.meta[filename]["st_size"]=size
-                    self.meta[filename]["st_ctime"]=time.time()
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
                     self.read(filename,threadclientsocket)
@@ -203,15 +208,15 @@ if __name__ == '__main__':
 
     leader_path="/leader"
 
-    peer_socket = random.randrange(49152, 65535)
+    peer_port = random.randrange(49152, 65535)
 
     zk = KazooClient(hosts='127.0.0.1:2181')
 
     zk.start()
 
-    print "started with port",peer_socket
+    print "started with port",peer_port
 
-    storage_path=str(peer_socket)
+    storage_path=str(peer_port)
 
     if not os.path.exists(storage_path):
         os.makedirs(storage_path)
@@ -219,11 +224,11 @@ if __name__ == '__main__':
     host=socket.gethostname()
 
 
-    e = election.election(zk, leader_path,host+"," +str(peer_socket))
+    e = election.election(zk, leader_path, host +"," + str(peer_port))
 
     meta={}
 
-    s1=server(host,peer_socket,storage_path,e,meta)
+    s1=server(host, peer_port, storage_path, e, meta)
 
 
 

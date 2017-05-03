@@ -91,18 +91,20 @@ class election:
                 child_key = self.get_key(self.childnum)
             return False,child_key
 
-
+    """
+        node includes itself in the election
+    """
     def perform(self):
         lock = self.zk.Lock("/lockpath", self.value)
 
         with lock:
-            self.key=str(self.zk.create( self.path, self.value, ephemeral=True, makepath=True,sequence=True))
+            self.key=str(self.zk.create(self.path, self.value, ephemeral=True, makepath=True, sequence=True))
             print "my key"+self.key
             num=self.get_num(self.key)
             self.childnum=int(num)+1
             end=self.zk.exists("end")
             if end is None:
-                self.zk.create("end",self.key)
+                self.zk.create("end", self.key)
                 self.parentkey=None
             else:
                 self.parentkey = str(self.zk.get("end")[0])

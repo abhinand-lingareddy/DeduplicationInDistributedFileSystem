@@ -1,7 +1,9 @@
 import sendlib
 import os
-import socket
 
+"""
+converts number to bytes
+"""
 def no_to_bytes(no):
     b=str(no)
     non_zeroscounter=len(b)
@@ -10,26 +12,27 @@ def no_to_bytes(no):
         zeros.append("0")
     return "".join(zeros)+b
 
-
+"""
+converts bytes to number
+"""
 def bytes_to_no(b):
     return int(b)
-
+"""
+returns the storage path prefix
+"""
 def storagepathprefix(storage_path):
     if storage_path is not None:
         return storage_path + '/'
     else:
         return ""
 
+
 def getfilepointer(storage_path,filename):
     storage_path = storagepathprefix(storage_path)
-    if len(storage_path) > 0:
-        f = open(storage_path + filename, 'wb')
-    else:
-        f = open(filename, 'wb')
+    f = open(storage_path + filename, 'wb')
     return f
+
 def recvfile(storage_path,filename,s):
-    # length = s.recv(4)
-    # length = bytes_to_no(length)
     f=getfilepointer(storage_path,filename)
     recvfilewithpointer(f,s)
 
@@ -46,7 +49,7 @@ def recvfilewithpointer(f,s):
 
 
 
-def send_file(file_path, s):
+def send_fromactual(file_path, s):
     # length=os.stat(file_path).st_size
     # length_str = no_to_bytes(length)
     # s.send(length_str)
@@ -63,6 +66,7 @@ def send_file(file_path, s):
         print 'Sending'
     f.close()
     print "Done Sending"
+
     #s.shutdown(socket.SHUT_WR)
 def send_fromdedupe(file_name,s,ds):
     content=ds.read(file_name)
@@ -75,10 +79,10 @@ def send_fromdedupe(file_name,s,ds):
             s.send(content[i:]+"~")
     print "Done Sending"
 
-def sendrequestandfile(storagepath,file_name, s, ack,ds):
+def sendresponseandfile(storagepath, file_name, s, ack, ds):
     sendlib.write_socket(s, ack)
     if os.path.isfile(storagepath+file_name):
-        send_file(storagepath + file_name, s)
+        send_fromactual(storagepath + file_name, s)
     else:
         send_fromdedupe(file_name, s, ds)
 

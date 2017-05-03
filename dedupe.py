@@ -154,5 +154,6 @@ class deduplication():
 
         print("Index =", index, "chunk size =", index - lastIndex)
         f.close()
+        os.remove(self.dedupepath+currentFile)
         return 1
 

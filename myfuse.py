@@ -23,11 +23,12 @@ class Memory(LoggingMixIn, Operations):
         self.host=host
         self.port=port
         self.fd = 0
-        self.l=[]
-        self.operation={}
-        self.tempclient=client(host,port)
-        self.client={}
+        self.l=[]   #readdir in memory
+        self.operation={}   #map between fd and operation
+        self.sharedclient=client(host, port)
+        self.privateclients={} #map between fd and private clients
         now = time()
+        #unimplemented methods have files parameter
         self.files={}
         self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
@@ -51,9 +52,9 @@ class Memory(LoggingMixIn, Operations):
     def create(self, path, mode):
         self.fd += 1
         self.operation[self.fd] = "create"
-        self.client[self.fd] = client(host, port)
+        self.privateclients[self.fd] = client(host, port)
         path=self.getpath(path)
-        self.client[self.fd].sendmetadata(path)
+        self.privateclients[self.fd].sendcreaterequest(path)
         self.l.append(path)
         return self.fd
 
@@ -63,7 +64,7 @@ class Memory(LoggingMixIn, Operations):
         path = self.getpath(path)
         if path not in self.l:
             raise FuseOSError(ENOENT)
-        meta=self.tempclient.getmetadata(path)
+        meta=self.sharedclient.metadataoperation(path)
         if meta is None:
             raise FuseOSError(ENOENT)
         return  meta
@@ -85,21 +86,21 @@ class Memory(LoggingMixIn, Operations):
     def open(self, path, flags):
         self.fd += 1
         self.operation[self.fd] = "read"
-        self.client[self.fd] = client(host, port)
+        self.privateclients[self.fd] = client(host, port)
         path = self.getpath(path)
-        self.client[self.fd].openforreadmeta(path)
+        self.privateclients[self.fd].sendreadrequestandgetmeta(path)
         return self.fd
 
     def read(self, path, size, offset, fh):
         path = self.getpath(path)
-        data=self.client[fh].s.recv(size)
+        data=self.privateclients[fh].s.recv(size)
         if data[-1]!='~':
             return data
         else:
             return data[:-1]
 
     def readdir(self, path, fh):
-        l=self.tempclient.list()
+        l=self.sharedclient.listoperation()
         l.extend(['.', '..'])
         self.l=l
         return l
@@ -146,16 +147,16 @@ class Memory(LoggingMixIn, Operations):
         pass
 
     def write(self, path, data, offset, fh):
-        self.client[fh].s.send(data)
+        self.privateclients[fh].s.send(data)
         return len(data)
 
     def flush(self, path, fh):
         if self.operation[fh]=="create":
-            self.client[fh].s.send("~")
-            self.client[fh].readresponse()
+            self.privateclients[fh].s.send("~")
+            self.privateclients[fh].readresponse()
         self.operation.pop(fh, None)
-        self.client[fh].close()
-        self.client.pop(fh,None)
+        self.privateclients[fh].close()
+        self.privateclients.pop(fh, None)
         return 0
 
 
@@ -163,7 +164,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 58243
+    port = 54114
 
 
 

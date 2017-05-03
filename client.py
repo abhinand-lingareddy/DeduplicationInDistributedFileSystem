@@ -4,13 +4,15 @@ import sendlib
 from time import time
 from stat import  S_IFREG
 from myparser import jsonParser
-
+"""
+class used by server/console/fuse for making calls to other servers 
+"""
 class client:
     def __init__(self,host,port):
         self.s = socket.socket()
         self.s.connect((host, port))
 
-    def sendmetadata(self,file_name):
+    def sendcreaterequest(self, file_name):
         request = {}
         meta=dict(st_mode=S_IFREG, st_nlink=1,
                                st_size=0, st_ctime=time(), st_mtime=time(),
@@ -21,7 +23,7 @@ class client:
         sendlib.write_socket(self.s, str(request))
         return meta
 
-    def getmetadata(self,filename):
+    def metadataoperation(self, filename):
         request = {}
         request["file_name"] = filename
         request["operation"] = "META"
@@ -39,12 +41,12 @@ class client:
         response = sendlib.read_socket(self.s)
         print response
 
-    def create(self,file_name,file_path):
-        self.sendmetadata(file_name)
-        filesendlib.send_file(file_path, self.s)
+    def createoperation(self, file_name, file_path):
+        self.sendcreaterequest(file_name)
+        filesendlib.send_fromactual(file_path, self.s)
         self.readresponse()
 
-    def openforreadresponse(self,file_name):
+    def sendreadrequestandgetresponse(self, file_name):
         request = {}
         request["file_name"] = file_name
         request["operation"] = "READ"
@@ -52,17 +54,18 @@ class client:
         response = sendlib.read_socket(self.s)
         jp = jsonParser(response)
         return jp
-    def openforreadmeta(self,file_name):
-        jp = self.openforreadresponse(file_name)
+
+    def sendreadrequestandgetmeta(self, file_name):
+        jp = self.sendreadrequestandgetresponse(file_name)
         return jp.getValue("meta")
 
-    def openforreadstatus(self,file_name):
-        jp=self.openforreadresponse(file_name)
+    def sendreadrequestandgetstatus(self, file_name):
+        jp=self.sendreadrequestandgetresponse(file_name)
         return jp.getValue("status")
 
     def openforread(self,file_name):
 
-        if self.openforreadstatus(file_name)==200:
+        if self.sendreadrequestandgetstatus(file_name)==200:
             f = filesendlib.getfilepointer(None, file_name)
         else:
             f=None
@@ -76,7 +79,7 @@ class client:
         else:
             print "file not found in the server"
 
-    def list(self):
+    def listoperation(self):
         request= {}
         request["operation"] = "LIST"
         sendlib.write_socket(self.s, str(request))
@@ -107,18 +110,19 @@ if __name__ == '__main__':
             print("1.Create")
             print("2.Read")
             print("3.List")
+            print("4.meta")
             print("5.Exit")
             x = input("Enter a number")
 
             if(x==1):
                 file_name=raw_input("enter filename")
                 file_path=raw_input("enter filepath")
-                c.create(file_name,file_path)
+                c.createoperation(file_name, file_path)
             elif(x==2):
                 file_name=raw_input("enter filename")
                 c.read(file_name)
             elif(x==3):
-                print c.list()
+                print c.listoperation()
             #exit operation
         except NameError:
             print "invalid inputs"
