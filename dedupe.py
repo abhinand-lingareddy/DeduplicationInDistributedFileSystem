@@ -92,6 +92,14 @@ class deduplication():
         file.write(content)
         file.close()
 
+    def getdatafromhash(self,hash):
+        path = self.createHashPath(hash)
+        path += "//data.txt"
+        file = open(path, "r")
+        content=file.read()
+        file.close()
+        return content
+
     def read(self,currentFile):
         hashfile = self.dedupepath+currentFile + "._temp"
         hf = open(hashfile, "r")
@@ -102,11 +110,7 @@ class deduplication():
                 break
             arr = line.split(" ")
             hash = arr[3].strip('\n')
-            path = self.createHashPath(hash)
-            path += "//data.txt"
-            data = open(path, "r")
-            actualdata.append(data.read())
-            data.close()
+            actualdata.append(self.getdatafromhash(hash))
         return "".join(actualdata)
     def actualfileexits(self,currentFile):
         return os.path.isfile(self.dedupepath+currentFile)

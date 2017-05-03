@@ -13,15 +13,19 @@ class client:
         self.s.connect((host, port))
 
     def sendcreaterequest(self, file_name):
-        request = {}
+        request=self.createrequest(file_name)
         meta=dict(st_mode=S_IFREG, st_nlink=1,
                                st_size=0, st_ctime=time(), st_mtime=time(),
                                st_atime=time())
         request["meta"] = meta
-        request["file_name"] = file_name
-        request["operation"] = "CREATE"
         sendlib.write_socket(self.s, str(request))
         return meta
+    @staticmethod
+    def createrequest(file_name):
+        request = {}
+        request["file_name"] = file_name
+        request["operation"] = "CREATE"
+        return request
 
     def metadataoperation(self, filename):
         request = {}

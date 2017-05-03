@@ -45,12 +45,13 @@ class server:
             return client(host, port)
 
     def on_child_sucess1(self,filename,threadclientsocket):
-        if not self.elect.ismaster():
-            sendlib.write_socket(threadclientsocket, "sucess2")
-        else:
-            self.zk.create("dedupequeue/" + filename, str(self.storage_path))
-            response = self.prepare_response(200)
-            sendlib.write_socket(threadclientsocket, response)
+        if threadclientsocket is not None:
+            if not self.elect.ismaster():
+                sendlib.write_socket(threadclientsocket, "sucess2")
+            else:
+                self.zk.create("dedupequeue/" + filename, str(self.storage_path))
+                response = self.prepare_response(200)
+                sendlib.write_socket(threadclientsocket, response)
 
     def writetochild(self,storage_path,filename,req,childclient):
         while(True and childclient is not None):
@@ -59,31 +60,51 @@ class server:
                 response = sendlib.read_socket(childclient.s)
                 if response=="sucess1":
                     break
+                else:
+                    jp=jsonParser(response)
+                    hashes=jp.getValue("hashes")
+                    for hash in hashes:
+                        data=self.ds.getdatafromhash(hash)
+                        sendlib.write_socket(data,childclient.s)
             except socket.error:
                 time.sleep(60)
-        return "sucess1"
+                childclient=self.getchildclient()
+        return "sucess1",childclient
+
+    def handlechildwrite(self,filename,req,threadclientsocket,childclient):
+        storage_path = filesendlib.storagepathprefix(self.storage_path)
+        response,childclient = self.writetochild(storage_path, filename, req, childclient)
+        if response == "sucess1":
+            self.on_child_sucess1(filename, threadclientsocket)
+        while True and childclient is not None:
+            try:
+                response = sendlib.read_socket(childclient.s)
+                if response == "sucess2":
+                    childclient.close()
+                    break
+            except socket.error:
+                time.sleep(60)
+                childclient=self.getchildclient()
+                response,childclient = self.writetochild(storage_path, filename, req, childclient)
 
     def create(self,filename,req,threadclientsocket,hopcount):
         filesendlib.recvfile(self.storage_path,filename,threadclientsocket)
         if not self.elect.ismaster():
-            sendlib.write_socket(threadclientsocket,"sucess1")
+            if filename.endswith("._temp"):
+                if self.ds.actualfileexits(file):
+                    pass
+                    #dedupe
+                else:
+                    pass
+                    #query for missing hash
+                #delete actual file
+            else:
+                sendlib.write_socket(threadclientsocket,"sucess1")
 
         childclient=self.getchildclient()
 
         if hopcount>0 and childclient is not None:
-            storage_path = filesendlib.storagepathprefix(self.storage_path)
-            response=self.writetochild(storage_path,filename,req,childclient)
-            if response=="sucess1":
-                self.on_child_sucess1(filename,threadclientsocket)
-            while True and childclient is not None:
-                    try:
-                        response = sendlib.read_socket(childclient.s)
-                        if response == "sucess2":
-                            childclient.close()
-                            break
-                    except socket.error:
-                        time.sleep(60)
-                        response = self.writetochild(storage_path, filename, req,childclient)
+            self.handlechildwrite(filename,req,threadclientsocket,childclient)
         else:
             self.on_child_sucess1(filename,threadclientsocket)
 
@@ -175,6 +196,10 @@ class server:
                             zk.create("dedupeserver/"+file,str(self.storage_path),ephemeral=True,makepath=True)
                             print "deduping file " + file
                             self.ds.write(file)
+                            request=client.createrequest(file)
+                            request["meta"]=self.meta[file]
+                            request["hopcount"]=100
+                            self.handlechildwrite(self, file, str(request), None, self.getchildclient())
                             zk.delete("dedupequeue/"+file)
                     except NodeExistsError:
                         pass
