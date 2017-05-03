@@ -7,6 +7,7 @@ import filesendlib
 import random
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError
+from kazoo.exceptions import NoNodeError
 from client import client
 import election
 import time
@@ -91,13 +92,18 @@ class server:
         filesendlib.recvfile(self.storage_path,filename,threadclientsocket)
         if not self.elect.ismaster():
             if filename.endswith("._temp"):
-                if self.ds.actualfileexits(file):
-                    pass
-                    #dedupe
+                actualfilename=filesendlib.actualfilename(filename)
+                if self.ds.actualfileexits(actualfilename):
+                    self.ds.createchunkfromactualfile(filename,actualfilename)
+                    sendlib.write_socket(threadclientsocket, "sucess1")
                 else:
-                    pass
-                    #query for missing hash
-                #delete actual file
+                    missingchunkhashes=self.ds.findmissingchunk(filename)
+                    response={}
+                    response["hashes"]=missingchunkhashes
+                    sendlib.write_socket(threadclientsocket, str(response))
+                    for missinghash in missingchunkhashes:
+                        chunk=sendlib.read_socket(threadclientsocket)
+                        self.ds.createChunkFile( chunk, missinghash)
             else:
                 sendlib.write_socket(threadclientsocket,"sucess1")
 
@@ -196,10 +202,10 @@ class server:
                             zk.create("dedupeserver/"+file,str(self.storage_path),ephemeral=True,makepath=True)
                             print "deduping file " + file
                             self.ds.write(file)
-                            request=client.createrequest(file)
+                            request=client.createrequest(file+"._temp")
                             request["meta"]=self.meta[file]
                             request["hopcount"]=100
-                            self.handlechildwrite(self, file, str(request), None, self.getchildclient())
+                            self.handlechildwrite(file+"._temp", str(request), None, self.getchildclient())
                             zk.delete("dedupequeue/"+file)
                     except NodeExistsError:
                         pass
@@ -218,10 +224,11 @@ class server:
                 operation=jp.getValue("operation")
                 if operation=="CREATE":
                     filename = jp.getValue("file_name")
-                    self.store_meta_memory(filename, jp)
+                    actualfilename=filesendlib.actualfilename(filename)
+                    self.store_meta_memory(actualfilename, jp)
                     #hopcount- no of hops the actual file must be farwarded
                     updatedhopcount=self.gethopcount(jp)
-                    if updatedhopcount>=0:
+                    if updatedhopcount>=0 and updatedhopcount<99:
                         req=self.updatehopcountrequest(jp,updatedhopcount)
                         #extra check to avoid unnecessary locking
                         if not self.isdedupeserver and not self.elect.ismaster():
@@ -233,7 +240,7 @@ class server:
                                     t.daemon = True
                                     t.start()
                     self.create(filename,req,threadclientsocket,updatedhopcount)
-                    self.updatesize(filename)
+                    self.updatesize(actualfilename)
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
                     self.read(filename,threadclientsocket)
@@ -264,19 +271,31 @@ class server:
 
 
 
-
+def cleanup(zk):
+    print "performing cleanup"
+    zk.delete("dedupequeue", recursive=True)
+    zk.create("dedupequeue", "somevalue")
 
 if __name__ == '__main__':
 
     #storage_path=raw_input("enter server name")
 
-    leader_path="/leader"
+
+    root_path="/root"
+    leader_path=root_path+"/leader"
 
     peer_port = random.randrange(49152, 65535)
 
     zk = KazooClient(hosts='127.0.0.1:2181')
 
     zk.start()
+
+    try:
+        l=zk.get_children(root_path)
+        if len(l)==0:
+            cleanup(zk)
+    except NoNodeError:
+        cleanup(zk)
 
     print "started with port",peer_port
 

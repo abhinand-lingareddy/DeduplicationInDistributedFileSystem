@@ -79,6 +79,12 @@ def send_fromdedupe(file_name,s,ds):
             s.send(content[i:]+"~")
     print "Done Sending"
 
+def actualfilename(filename):
+    if filename.endswith("._temp"):
+        return filename[:len("._temp")*-1]
+    return filename
+
+
 def sendresponseandfile(storagepath, file_name, s, ack, ds):
     sendlib.write_socket(s, ack)
     if os.path.isfile(storagepath+file_name):

@@ -1,5 +1,6 @@
 import os
 import hashlib
+import filesendlib
 
 
 class dedupewritevariables():
@@ -61,31 +62,40 @@ class deduplication():
 
         return path
 
+    def createChunk(self,hashPath,chunk):
+        os.makedirs(hashPath)
+        chunkFilename = hashPath + "//data.txt"
+        file = open(chunkFilename, "w+")
+        file.write(chunk)
+        file.close()
+        refFilename = hashPath + "//links.txt"
+        file = open(refFilename, "w+")
+        file.write(str(1))
+        file.close()
+
+    def addChunkReference(self,hashPath):
+        refFilename = hashPath + "//links.txt"
+        file = open(refFilename, "r")
+        count = int(file.read())
+        count += 1
+        file.close()
+        file = open(refFilename, "w")
+        file.write(str(count))
+        file.close()
+
+
+
     def createChunkFile(self,chunk, hash):
         hashPath = self.createHashPath(hash)
         if not os.path.exists(hashPath):
-            os.makedirs(hashPath)
-            chunkFilename = hashPath + "//data.txt"
-            file = open(chunkFilename, "w+")
-            file.write(''.join(chunk))
-            file.close()
-            refFilename = hashPath + "//links.txt"
-            file = open(refFilename, "w+")
-            file.write(str(1))
-            file.close()
+            self.createChunk(hashPath,chunk)
         else:
-            refFilename = hashPath + "//links.txt"
-            file = open(refFilename, "r")
-            count = int(file.read())
-            count += 1
-            file.close()
-            file = open(refFilename, "w")
-            file.write(str(count))
-            file.close()
+            self.addChunkReference(hashPath)
+
 
     def processChunk(self,currentFile,start, end,chunk):
         hash = hashlib.sha1(''.join(chunk).encode('utf-8')).hexdigest()
-        self.createChunkFile(chunk, hash)
+        self.createChunkFile( ''.join(chunk), hash)
         tempFile = self.dedupepath+currentFile + "._temp"
         content = str(start) + " " + str(end) + " " + str(end - start) + " " + str(hash) + "\n"
         file = open(tempFile, "a+")
@@ -111,7 +121,51 @@ class deduplication():
             arr = line.split(" ")
             hash = arr[3].strip('\n')
             actualdata.append(self.getdatafromhash(hash))
+        hf.close()
         return "".join(actualdata)
+
+    def createchunkfromactualfile(self,dedupefile,actualfile):
+        hf = open( self.dedupepath + dedupefile, "r")
+        af= open(self.dedupepath + actualfile,"r")
+        while True:
+            line = hf.readline()
+            if not line:
+                break
+            arr = line.split(" ")
+            hash = arr[3].strip('\n')
+            hashPath = self.createHashPath(hash)
+            if not os.path.exists(hashPath):
+                start = int(arr[0])
+                length = int(arr[2])
+                af.seek(start)
+                chunk = af.read(length)
+                self.createChunk( hashPath, chunk)
+            else:
+                self.addChunkReference(hashPath)
+        af.close()
+        hf.close()
+        os.remove(self.dedupepath + actualfile)
+
+    def findmissingchunk(self,dedupefilename):
+        hashfile = self.dedupepath + dedupefilename
+        hf = open(hashfile, "r")
+        missingchunk=[]
+        while True:
+            line = hf.readline()
+            if not line:
+                break
+            arr = line.split(" ")
+            hash = arr[3].strip('\n')
+            hashPath = self.createHashPath(hash)
+            if not os.path.exists(hashPath):
+                missingchunk.append(hash)
+            else:
+                self.addChunkReference(hashPath)
+        hf.close()
+        return hash
+
+
+
     def actualfileexits(self,currentFile):
         return os.path.isfile(self.dedupepath+currentFile)
 
