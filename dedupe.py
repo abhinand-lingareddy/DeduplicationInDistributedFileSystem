@@ -1,6 +1,6 @@
 import os
 import hashlib
-import filesendlib
+
 
 
 class dedupewritevariables():
@@ -162,7 +162,7 @@ class deduplication():
             else:
                 self.addChunkReference(hashPath)
         hf.close()
-        return hash
+        return missingchunk
 
 
 

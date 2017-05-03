@@ -59,14 +59,14 @@ class server:
             try:
                 filesendlib.sendresponseandfile(filesendlib.storagepathprefix(storage_path), filename, childclient.s, req, self.ds)
                 response = sendlib.read_socket(childclient.s)
-                if response=="sucess1":
-                    break
-                else:
+                if response!="sucess1":
                     jp=jsonParser(response)
                     hashes=jp.getValue("hashes")
+                    print "requested hashes " + str(hashes)
                     for hash in hashes:
                         data=self.ds.getdatafromhash(hash)
-                        sendlib.write_socket(data,childclient.s)
+                        sendlib.write_socket(childclient.s,data)
+                break
             except socket.error:
                 time.sleep(60)
                 childclient=self.getchildclient()
@@ -103,6 +103,7 @@ class server:
                     sendlib.write_socket(threadclientsocket, str(response))
                     for missinghash in missingchunkhashes:
                         chunk=sendlib.read_socket(threadclientsocket)
+                        print "received chunk for hash"+missinghash+" \n"+chunk
                         self.ds.createChunkFile( chunk, missinghash)
             else:
                 sendlib.write_socket(threadclientsocket,"sucess1")
@@ -240,7 +241,8 @@ class server:
                                     t.daemon = True
                                     t.start()
                     self.create(filename,req,threadclientsocket,updatedhopcount)
-                    self.updatesize(actualfilename)
+                    if filename==actualfilename:
+                        self.updatesize(actualfilename)
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
                     self.read(filename,threadclientsocket)
