@@ -164,10 +164,26 @@ class deduplication():
         hf.close()
         return missingchunk
 
+    def findfilelength(self,filename):
+        hashfile = self.dedupepath + filename+"._temp"
+        hf = open(hashfile, "r")
+        length=0
+        while True:
+            line = hf.readline()
+            if not line:
+                break
+            arr = line.split(" ")
+            length=length+int(arr[2])
+        hf.close()
+        return length
+
 
 
     def actualfileexits(self,currentFile):
         return os.path.isfile(self.dedupepath+currentFile)
+
+    def dedupefileexits(self,currentFile):
+        return os.path.isfile(self.dedupepath+currentFile+"._temp")
 
 
     def write(self,currentFile):

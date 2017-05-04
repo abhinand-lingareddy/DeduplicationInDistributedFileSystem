@@ -4,7 +4,6 @@ import socket
 import sendlib
 import threading
 import filesendlib
-import random
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError
 from kazoo.exceptions import NoNodeError
@@ -113,7 +112,6 @@ class server:
                     sendlib.write_socket(threadclientsocket, str(response))
                     for missinghash in missingchunkhashes:
                         chunk=sendlib.read_socket(threadclientsocket)
-                        print "received chunk for hash"+missinghash+" \n"+chunk
                         self.ds.createChunkFile( chunk, missinghash)
             else:
                 sendlib.write_socket(threadclientsocket,"sucess1")
@@ -180,6 +178,22 @@ class server:
 
 
     def read_meta(self,filename):
+        if filename not in self.meta:
+            if self.ds.actualfileexits(filename):
+                st = os.lstat(filesendlib.storagepathprefix(self.storage_path)+filename)
+                filemeta =dict((key, getattr(st, key)) for key in ('st_atime', 'st_ctime',
+                                                                'st_gid', 'st_mode', 'st_mtime', 'st_nlink', 'st_size',
+                                                                'st_uid'))
+
+            elif self.ds.dedupefileexits(filename):
+                st = os.lstat(filesendlib.storagepathprefix(self.storage_path) + filename+"._temp")
+                filemeta = dict((key, getattr(st, key)) for key in ('st_atime', 'st_ctime',
+                                                                    'st_gid', 'st_mode', 'st_mtime', 'st_nlink',
+                                                                    'st_uid'))
+                filemeta['st_size']=self.ds.findfilelength(filename)
+            else:
+                return None
+            self.meta[filename] = filemeta
         return self.meta[filename]
 
 
@@ -214,7 +228,7 @@ class server:
                             print "deduping file " + file
                             self.ds.write(file)
                             request=client.createrequest(file+"._temp")
-                            request["meta"]=self.meta[file]
+                            request["meta"]=self.read_meta(file)
                             request["hopcount"]=100
                             requestToken = random.getrandbits(128)
                             request["token"] = requestToken
@@ -243,14 +257,12 @@ class server:
                     self.store_meta_memory(actualfilename, jp)
                     if (jp.has("token")):
                         requestToken=jp.getValue("token")
-                        print "request tokens " + str(self.requesttokens)
                         if requestToken in self.requesttokens:
                             print "sending terminate"
                             sendlib.write_socket(threadclientsocket,"terminate")
                             continue
                         else:
                             self.requesttokens.add(requestToken)
-                            print "request added "+str(self.requesttokens)
                             sendlib.write_socket(threadclientsocket,"continue")
                     else:
                         isclientrequest = True
@@ -268,12 +280,12 @@ class server:
                 elif operation=="READ":
                     filename = jp.getValue("file_name")
                     self.read(filename,threadclientsocket)
-                    self.meta[filename]["st_ctime"]=time.time()
                 elif operation=="LIST":
                     self.list(threadclientsocket)
                 elif operation=="META":
                     filename = jp.getValue("file_name")
-                    if filename in self.meta:
+                    filemeta=self.read_meta(filename)
+                    if filemeta is not None:
                         sendlib.write_socket(threadclientsocket,str(self.meta[filename]))
                     else:
                         sendlib.write_socket(threadclientsocket,"ENOENT")
