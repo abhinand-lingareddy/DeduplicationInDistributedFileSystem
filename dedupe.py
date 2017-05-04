@@ -174,15 +174,15 @@ class deduplication():
         sig=0
         f = open(self.dedupepath+currentFile, 'r')
         dv=dedupewritevariables()
+        index = 0
+        lastIndex = 0
         for i in range(0, self.windowSize):
             c = f.read(1)
+            index += 1
             self.PushChar(c,dv)
             sig = (sig * self.D + ord(c)) % self.Q
 
         # print("sig value = ", sig)
-
-        index = 0
-        lastIndex = 0
 
         while True:
             c = f.read(1)
