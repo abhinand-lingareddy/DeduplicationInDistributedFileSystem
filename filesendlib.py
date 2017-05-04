@@ -85,8 +85,12 @@ def actualfilename(filename):
     return filename
 
 
-def sendresponseandfile(storagepath, file_name, s, ack, ds):
+def sendresponseandfile(storagepath, file_name, s, ack, ds,isclientrequest):
     sendlib.write_socket(s, ack)
+    if not isclientrequest:
+        response=sendlib.read_socket(s)
+        if response=="terminate":
+            return  response
     if os.path.isfile(storagepath+file_name):
         send_fromactual(storagepath + file_name, s)
     else:

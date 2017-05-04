@@ -24,6 +24,7 @@ class election:
         self.value=value
         self.is_master=False
         self.childinfo=None
+        self.masterwatch=False
         zk.add_listener(self.stat_listener)
 
 
@@ -49,10 +50,24 @@ class election:
             self.parentkey = self.find_parent(self.parentkey)
             if self.parentkey is None:
                 self.is_master = True
+                self.zk.set("master", self.value)
             else:
                 print "parent " + self.parentkey
                 kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.watch_parent)
             return False
+
+    def watch_master(self,data, stat):
+        print "watch child"
+        if self.is_master:
+            self.masterwatch=False
+            return False
+        elif self.childinfo is not None:
+            self.masterinfo=None
+            self.masterwatch=False
+            return False
+        else:
+            self.masterinfo=str(self.zk.get("master")[0])
+
 
 
     def watch_child(self,data, stat):
@@ -64,8 +79,14 @@ class election:
                     status,child_key=self.find_child()
                     if not status:
                         self.childinfo=None
+                        if not self.masterwatch:
+                            self.masterwatch = True
+                            kazoo.recipe.watchers.DataWatch(self.zk, "master", func=self.watch_master)
                     print "watching child"+child_key
                     kazoo.recipe.watchers.DataWatch(self.zk, child_key, func=self.watch_child)
+            else:
+                self.masterwatch=True
+                kazoo.recipe.watchers.DataWatch(self.zk, "master", func=self.watch_master)
         else:
             self.childinfo=data
             print self.childnum
@@ -114,6 +135,7 @@ class election:
 
             if self.parentkey is None:
                 self.is_master=True
+                self.zk.set("master", self.value)
             else:
                 self.is_master = False
                 kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.watch_parent)

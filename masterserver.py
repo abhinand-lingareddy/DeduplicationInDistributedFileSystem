@@ -14,7 +14,7 @@ import time
 import os
 import dedupe
 from threading import Lock
-
+import random
 
 class server:
     def __init__(self,host,port,storage_path,elect,meta,zk):
@@ -26,8 +26,8 @@ class server:
         self.elect=elect
         self.meta=meta
         self.zk=zk
+        self.requesttokens=set()
         self.no_dedupe_servers=2 #no of deduplication servers, used only when this is the master node
-        self.isdedupeserver=False
         self.lock= Lock()
         self.ds=dedupe.deduplication(dedupepath=storage_path)
 
@@ -38,16 +38,24 @@ class server:
     def accept(self):
         c, addr =self.serversocket.accept()
         return c
-
-    def getchildclient(self):
-        if self.elect.childinfo is not None:
-            host = self.elect.childinfo[:self.elect.childinfo.index(',')]
-            port = int(self.elect.childinfo[self.elect.childinfo.index(',') + 1:])
+    def getclientfrominfo(self,info):
+        if info is not None:
+            host = info[:info.index(',')]
+            port = int(info[info.index(',') + 1:])
             return client(host, port)
 
-    def on_child_sucess1(self,filename,threadclientsocket):
+
+    def getnextclient(self):
+        nextclient=self.getclientfrominfo(self.elect.childinfo)
+        if nextclient is None:
+            nextclient = self.getclientfrominfo(self.elect.masterinfo)
+        return nextclient
+
+
+
+    def on_child_sucess1(self,filename,threadclientsocket,isclientrequest):
         if threadclientsocket is not None:
-            if not self.elect.ismaster():
+            if not isclientrequest:
                 sendlib.write_socket(threadclientsocket, "sucess2")
             else:
                 self.zk.create("dedupequeue/" + filename, str(self.storage_path))
@@ -57,7 +65,9 @@ class server:
     def writetochild(self,storage_path,filename,req,childclient):
         while(True and childclient is not None):
             try:
-                filesendlib.sendresponseandfile(filesendlib.storagepathprefix(storage_path), filename, childclient.s, req, self.ds)
+                status=filesendlib.sendresponseandfile(filesendlib.storagepathprefix(storage_path), filename, childclient.s, req, self.ds,False)
+                if status=="terminate":
+                    return "terminate",childclient
                 response = sendlib.read_socket(childclient.s)
                 if response!="sucess1":
                     jp=jsonParser(response)
@@ -69,28 +79,28 @@ class server:
                 break
             except socket.error:
                 time.sleep(60)
-                childclient=self.getchildclient()
+                childclient=self.getnextclient()
         return "sucess1",childclient
 
-    def handlechildwrite(self,filename,req,threadclientsocket,childclient):
+    def handlechildwrite(self,filename,req,threadclientsocket,childclient,isclientrequest):
         storage_path = filesendlib.storagepathprefix(self.storage_path)
         response,childclient = self.writetochild(storage_path, filename, req, childclient)
-        if response == "sucess1":
-            self.on_child_sucess1(filename, threadclientsocket)
-        while True and childclient is not None:
-            try:
-                response = sendlib.read_socket(childclient.s)
-                if response == "sucess2":
-                    childclient.close()
-                    break
-            except socket.error:
-                time.sleep(60)
-                childclient=self.getchildclient()
-                response,childclient = self.writetochild(storage_path, filename, req, childclient)
 
-    def create(self,filename,req,threadclientsocket,hopcount):
+        self.on_child_sucess1(filename, threadclientsocket,isclientrequest)
+        while response!="terminate" and childclient is not None:
+                try:
+                    response = sendlib.read_socket(childclient.s)
+                    if response == "sucess2":
+                        childclient.close()
+                        break
+                except socket.error:
+                    time.sleep(60)
+                    childclient=self.getnextclient()
+                    response,childclient = self.writetochild(storage_path, filename, req, childclient)
+
+    def create(self,filename,req,threadclientsocket,hopcount,isclientrequest):
         filesendlib.recvfile(self.storage_path,filename,threadclientsocket)
-        if not self.elect.ismaster():
+        if not isclientrequest:
             if filename.endswith("._temp"):
                 actualfilename=filesendlib.actualfilename(filename)
                 if self.ds.actualfileexits(actualfilename):
@@ -108,12 +118,12 @@ class server:
             else:
                 sendlib.write_socket(threadclientsocket,"sucess1")
 
-        childclient=self.getchildclient()
+        childclient=self.getnextclient()
 
         if hopcount>0 and childclient is not None:
-            self.handlechildwrite(filename,req,threadclientsocket,childclient)
+            self.handlechildwrite(filename,req,threadclientsocket,childclient,isclientrequest)
         else:
-            self.on_child_sucess1(filename,threadclientsocket)
+            self.on_child_sucess1(filename,threadclientsocket,isclientrequest)
 
 
 
@@ -125,7 +135,7 @@ class server:
         if  meta is None:
             return 404
         response["meta"]=meta
-        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket, str(response), self.ds)
+        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket, str(response), self.ds,True)
 
     def list(self,threadclientsocket):
         result=self.response_dic(200)
@@ -206,7 +216,10 @@ class server:
                             request=client.createrequest(file+"._temp")
                             request["meta"]=self.meta[file]
                             request["hopcount"]=100
-                            self.handlechildwrite(file+"._temp", str(request), None, self.getchildclient())
+                            requestToken = random.getrandbits(128)
+                            request["token"] = requestToken
+                            self.requesttokens.add(requestToken)
+                            self.handlechildwrite(file +"._temp", str(request), None, self.getnextclient(),False)
                             zk.delete("dedupequeue/"+file)
                     except NodeExistsError:
                         pass
@@ -224,23 +237,32 @@ class server:
                 jp=jsonParser(req)
                 operation=jp.getValue("operation")
                 if operation=="CREATE":
+                    isclientrequest=False
                     filename = jp.getValue("file_name")
                     actualfilename=filesendlib.actualfilename(filename)
                     self.store_meta_memory(actualfilename, jp)
+                    if (jp.has("token")):
+                        requestToken=jp.getValue("token")
+                        print "request tokens " + str(self.requesttokens)
+                        if requestToken in self.requesttokens:
+                            print "sending terminate"
+                            sendlib.write_socket(threadclientsocket,"terminate")
+                            continue
+                        else:
+                            self.requesttokens.add(requestToken)
+                            print "request added "+str(self.requesttokens)
+                            sendlib.write_socket(threadclientsocket,"continue")
+                    else:
+                        isclientrequest = True
+                        requestToken= random.getrandbits(128)
+                        reqdic=jp.getdic()
+                        reqdic["token"]=requestToken
+                        self.requesttokens.add(requestToken)
                     #hopcount- no of hops the actual file must be farwarded
                     updatedhopcount=self.gethopcount(jp)
                     if updatedhopcount>=0 and updatedhopcount<99:
                         req=self.updatehopcountrequest(jp,updatedhopcount)
-                        #extra check to avoid unnecessary locking
-                        if not self.isdedupeserver and not self.elect.ismaster():
-                            with self.lock:
-                                if not self.isdedupeserver:
-                                    print("this is a dedupeserver")
-                                    self.isdedupeserver=True
-                                    t = threading.Thread(target=self.performdedupe)
-                                    t.daemon = True
-                                    t.start()
-                    self.create(filename,req,threadclientsocket,updatedhopcount)
+                    self.create(filename,req,threadclientsocket,updatedhopcount,isclientrequest)
                     if filename==actualfilename:
                         self.updatesize(actualfilename)
                 elif operation=="READ":
@@ -318,6 +340,11 @@ if __name__ == '__main__':
 
 
     e.perform()
+
+    print("this is a dedupeserver")
+    t = threading.Thread(target=s1.performdedupe)
+    t.daemon = True
+    t.start()
 
 
     while True:
