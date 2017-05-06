@@ -127,23 +127,35 @@ class server:
     def read(self, filename, threadclientsocket):
         response = self.response_dic(200)
         meta = self.read_meta(filename)
-        if meta is None:
+        if zk.exists("owner/" + filename) is not None:
+            owner = zk.get("owner/" + filename)
+            info = owner[0].split(" ")
+            host = info[1]
+            port = int(info[3])
+            if host == self.host and port == self.port:
+                response["meta"] = self.meta[filename]
+                filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
+                                                threadclientsocket,
+                                                str(response), self.ds, True)
+            else:
                 return 404
-        response["meta"] = meta
-        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename, threadclientsocket,
-                                        str(response), self.ds, True)
+        else:
+            return 404
+
 
     def list(self, threadclientsocket):
         result = self.response_dic(200)
-        if os.path.exists(storage_path):
-            files = [file for file in os.listdir(self.storage_path)
-                     if os.path.isfile(os.path.join(self.storage_path, file))]
-            for i in range(len(files)):
-                if files[i].endswith("._temp"):
-                    files[i] = files[i][:len("._temp") * -1]
-            result["files"] = files
-        else:
-            result["files"] = []
+        # if os.path.exists(storage_path):
+        #     files = [file for file in os.listdir(self.storage_path)
+        #              if os.path.isfile(os.path.join(self.storage_path, file))]
+        #     for i in range(len(files)):
+        #         if files[i].endswith("._temp"):
+        #             files[i] = files[i][:len("._temp") * -1]
+        #     result["files"] = files
+        # else:
+        #     result["files"] = []
+        files = [file for file in self.meta]
+        result["files"] = files
         sendlib.write_socket(threadclientsocket, str(result))
 
     def response_dic(self, result):
@@ -170,7 +182,7 @@ class server:
     def store_meta_memory(self, filename, jp):
         self.meta[filename] = jp.getValue("meta")
         if zk.exists("metadata/" + filename) is None:
-            zk.create("metadata/" + filename, self.meta[filename], ephemeral=True, makepath=True)
+            zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=True, makepath=True)
         if zk.exists("owner/" + filename) is None:
             zk.create("owner/" + filename, "( " + str(self.host) + " : " + str(self.port) + " )", ephemeral=True, makepath=True)
 
@@ -256,7 +268,7 @@ class server:
                 if (jp.has("token")):
                     requestToken = jp.getValue("token")
                     if requestToken in self.requesttokens:
-                        print "sending terminate"
+                        print ("sending terminate")
                         sendlib.write_socket(threadclientsocket, "terminate")
                         continue
                     else:
@@ -303,10 +315,9 @@ class server:
 
 
 def cleanup(zk):
-    print "performing cleanup"
+    print("performing cleanup")
     zk.delete("dedupequeue", recursive=True)
     zk.create("dedupequeue", "somevalue")
-
 
 if __name__ == '__main__':
 
@@ -329,7 +340,7 @@ if __name__ == '__main__':
     except NoNodeError:
         cleanup(zk)
 
-    print "started with port", peer_port
+    print("started with port", peer_port)
 
     storage_path = str(peer_port)
 
@@ -342,9 +353,18 @@ if __name__ == '__main__':
 
     meta = {}
 
+    if zk.exists("metadata/") is not None:
+        list_of_files = zk.get_children("metadata/")
+        for file in list_of_files:
+            meta_string = zk.get("metadata/" + file)
+            print(meta_string)
+            meta[file] = eval(meta_string[0])
+            print meta[file]
+
     s1 = server(host, peer_port, storage_path, e, meta, zk)
 
     e.perform()
+
 
     print("this is a dedupeserver")
     t = threading.Thread(target=s1.performdedupe)
