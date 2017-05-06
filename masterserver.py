@@ -138,14 +138,23 @@ class server:
                 owners.append(ownerh_p)
                 zk.set("owner/" + filename, str(owners))
 
+    def checkcompletefilepresent(self,actualfilename,req):
+        actualfilesize = os.path.getsize(filesendlib.storagepathprefix(self.storage_path) + actualfilename)
+        if actualfilename in self.meta:
+            metafilesize = self.meta[actualfilename]["st_size"]
+        else:
+            resdic = eval(req)
+            metafilesize = resdic["meta"]["st_size"]
+        return actualfilesize == metafilesize
+
     def create(self, filename, req, threadclientsocket, hopcount, isclientrequest):
         filesendlib.recvfile(self.storage_path, filename, threadclientsocket)
         if not isclientrequest:
             if filename.endswith("._temp"):
                 actualfilename = filesendlib.actualfilename(filename)
-                if self.ds.actualfileexits(actualfilename) and os.path.getsize(filesendlib.storagepathprefix(self.storage_path) + filename)==self.meta[filename]["st_size"]:
-                    self.ds.createchunkfromactualfile(filename, actualfilename)
-                    sendlib.write_socket(threadclientsocket, "sucess1")
+                if self.ds.actualfileexits(actualfilename) and self.checkcompletefilepresent(actualfilename,req):
+                        self.ds.createchunkfromactualfile(filename, actualfilename)
+                        sendlib.write_socket(threadclientsocket, "sucess1")
                 else:
                     missingchunkhashes = self.ds.findmissingchunk(filename)
                     response = {}
