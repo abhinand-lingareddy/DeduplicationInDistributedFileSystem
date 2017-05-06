@@ -13,6 +13,7 @@ import os
 import dedupe
 from threading import Lock
 import random
+import kazoo
 
 
 class server:
@@ -31,6 +32,31 @@ class server:
         self.ds = dedupe.deduplication(dedupepath=storage_path)
         self.host = host
         self.port = port
+        kazoo.recipe.watchers.ChildrenWatch("metadata", self.updatemetadata)
+
+
+    #Todo check if delete a file and recreate calls this or not
+    def addFiles(self,newfiles):
+        for newfile in newfiles:
+            print "update metadata called for file", newfile
+            meta_string = zk.get("metadata/" + file)
+            print(str(meta_string[0]))
+            self.meta[newfile]=eval(str(meta_string[0]))
+
+    def removeFiles(self,oldfiles):
+        for oldfile in oldfiles:
+            print "remove old files metadata",oldfile
+            del self.meta[oldfile]
+
+    def updatemetadata(self,updatedfiles):
+        cset = set(updatedfiles)
+        s = (file for file in self.meta)
+        n = cset - s
+        if len(n) > 0:
+            self.addFiles(n)
+        n = s - cset
+        if len(n) > 0:
+            self.removeFiles(n)
 
     # todo
     def getname(self):
@@ -178,7 +204,7 @@ class server:
     def prepare_response(self, result):
         response = self.response_dic(result)
         return str(response)
-
+    #todo
     def store_meta_memory(self, filename, jp):
         self.meta[filename] = jp.getValue("meta")
         if zk.exists("metadata/" + filename) is None:
@@ -319,6 +345,12 @@ def cleanup(zk):
     zk.delete("dedupequeue", recursive=True)
     zk.create("dedupequeue", "somevalue")
 
+
+
+
+
+
+
 if __name__ == '__main__':
 
     # storage_path=raw_input("enter server name")
@@ -353,13 +385,9 @@ if __name__ == '__main__':
 
     meta = {}
 
-    if zk.exists("metadata/") is not None:
-        list_of_files = zk.get_children("metadata/")
-        for file in list_of_files:
-            meta_string = zk.get("metadata/" + file)
-            print(meta_string)
-            meta[file] = eval(meta_string[0])
-            print meta[file]
+
+
+
 
     s1 = server(host, peer_port, storage_path, e, meta, zk)
 
