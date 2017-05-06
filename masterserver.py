@@ -14,6 +14,7 @@ import dedupe
 from threading import Lock
 import random
 import kazoo
+import logging
 
 
 class server:
@@ -32,14 +33,14 @@ class server:
         self.ds = dedupe.deduplication(dedupepath=storage_path)
         self.host = host
         self.port = port
-        kazoo.recipe.watchers.ChildrenWatch("metadata", self.updatemetadata)
+        kazoo.recipe.watchers.ChildrenWatch(self.zk,"/metadata", self.updatemetadata)
 
 
     #Todo check if delete a file and recreate calls this or not
     def addFiles(self,newfiles):
         for newfile in newfiles:
             print "update metadata called for file", newfile
-            meta_string = zk.get("metadata/" + file)
+            meta_string = zk.get("/metadata/" + newfile)
             print(str(meta_string[0]))
             self.meta[newfile]=eval(str(meta_string[0]))
 
@@ -49,8 +50,10 @@ class server:
             del self.meta[oldfile]
 
     def updatemetadata(self,updatedfiles):
+        print "metadata update called with files"+str(updatedfiles)
+        print "current metadata"+str(self.meta.keys())
         cset = set(updatedfiles)
-        s = (file for file in self.meta)
+        s = set(file for file in self.meta)
         n = cset - s
         if len(n) > 0:
             self.addFiles(n)
@@ -301,7 +304,6 @@ class server:
                 isclientrequest = False
                 filename = jp.getValue("file_name")
                 actualfilename = filesendlib.actualfilename(filename)
-                self.store_meta_memory(actualfilename, jp)
                 if (jp.has("token")):
                     requestToken = jp.getValue("token")
                     if requestToken in self.requesttokens:
@@ -317,6 +319,7 @@ class server:
                     reqdic = jp.getdic()
                     reqdic["token"] = requestToken
                     self.requesttokens.add(requestToken)
+                    self.store_meta_memory(actualfilename, jp)
                     if zk.exists("owner/" + filename) is None:
                         zk.create("owner/" + filename, "( " + str(self.host) + " : " + str(self.port) + " )",
                                     ephemeral=False, makepath=True)
@@ -326,8 +329,8 @@ class server:
                     req = self.updatehopcountrequest(jp, updatedhopcount)
                 self.create(filename, req, threadclientsocket, updatedhopcount, isclientrequest)
                 if filename == actualfilename:
-                    self.updatesize(actualfilename)
                     if isclientrequest:
+                        self.updatesize(actualfilename)
                         if zk.exists("metadata/" + filename) is None:
                             zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=True, makepath=True)
             elif operation == "READ":
@@ -363,6 +366,7 @@ def cleanup(zk):
     zk.create("dedupequeue", "somevalue")
     zk.delete("owner", recursive=True)
     zk.delete("metadata", recursive=True)
+    zk.create("metadata", "somevalue")
 
 
 
@@ -371,6 +375,7 @@ def cleanup(zk):
 
 
 if __name__ == '__main__':
+    logging.basicConfig()
 
     # storage_path=raw_input("enter server name")
 
