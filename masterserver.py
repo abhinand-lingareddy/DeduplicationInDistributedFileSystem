@@ -138,7 +138,22 @@ class server:
                                                 threadclientsocket,
                                                 str(response), self.ds, True)
             else:
-                return 404
+                s = socket.socket()
+                s.connect((host, port))
+                request = {}
+                request["file_name"] = filename
+                request["operation"] = "READ"
+                sendlib.write_socket(s, str(request))
+                resp = sendlib.read_socket(s)
+                jp = jsonParser(resp)
+                if jp.getValue("status") == 200:
+                    self.meta[filename] = jp.getValue("meta")
+                    response["meta"] = self.meta[filename]
+                    filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
+                    s.close()
+                    filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
+                                                threadclientsocket,
+                                                str(response), self.ds, True)
         else:
             return 404
 
@@ -181,10 +196,6 @@ class server:
 
     def store_meta_memory(self, filename, jp):
         self.meta[filename] = jp.getValue("meta")
-        if zk.exists("metadata/" + filename) is None:
-            zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=True, makepath=True)
-        if zk.exists("owner/" + filename) is None:
-            zk.create("owner/" + filename, "( " + str(self.host) + " : " + str(self.port) + " )", ephemeral=True, makepath=True)
 
     def read_meta(self, filename):
         if filename not in self.meta:
@@ -224,7 +235,7 @@ class server:
         if os.path.exists(storagepath + filename):
             size = os.path.getsize(storagepath + filename)
         else:
-            size = os.path.getsize(storagepath + filename + "._temp")
+            size = self.ds.findfilelength(storagepath + filename)
         self.meta[filename]["st_size"] = size
         self.meta[filename]["st_ctime"] = time.time()
 
@@ -280,6 +291,9 @@ class server:
                     reqdic = jp.getdic()
                     reqdic["token"] = requestToken
                     self.requesttokens.add(requestToken)
+                    if zk.exists("owner/" + filename) is None:
+                        zk.create("owner/" + filename, "( " + str(self.host) + " : " + str(self.port) + " )",
+                                    ephemeral=False, makepath=True)
                 # hopcount- no of hops the actual file must be farwarded
                 updatedhopcount = self.gethopcount(jp)
                 if updatedhopcount >= 0 and updatedhopcount < 99:
@@ -287,6 +301,9 @@ class server:
                 self.create(filename, req, threadclientsocket, updatedhopcount, isclientrequest)
                 if filename == actualfilename:
                     self.updatesize(actualfilename)
+                    if isclientrequest:
+                        if zk.exists("metadata/" + filename) is None:
+                            zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=True, makepath=True)
             elif operation == "READ":
                 filename = jp.getValue("file_name")
                 self.read(filename, threadclientsocket)
@@ -318,6 +335,8 @@ def cleanup(zk):
     print("performing cleanup")
     zk.delete("dedupequeue", recursive=True)
     zk.create("dedupequeue", "somevalue")
+    zk.delete("owner", recursive=True)
+    zk.delete("metadata", recursive=True)
 
 if __name__ == '__main__':
 
