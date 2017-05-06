@@ -78,7 +78,7 @@ class server:
 
     def getnextclient(self):
         nextclient = self.getclientfrominfo(self.elect.childinfo)
-        if nextclient is None:
+        if nextclient is None and not self.elect.ismaster():
             nextclient = self.getclientfrominfo(self.elect.masterinfo)
         return nextclient
 
@@ -128,12 +128,22 @@ class server:
                 childclient = self.getnextclient()
                 response, childclient = self.writetochild(storage_path, filename, req, childclient)
 
+    def addownerentry(self,filename):
+        if zk.exists("owner/" + filename) is not None:
+            ownerh_p = "( " + str(self.host) + " : " + str(self.port) + " : " + str(self.elect.key) + " )"
+            lock = self.zk.Lock("filelockpath" + filename, self.elect.key)
+            with lock:
+                owners = zk.get("owner/" + filename)[0]
+                owners = eval(str(owners))
+                owners.append(ownerh_p)
+                zk.set("owner/" + filename, str(owners))
+
     def create(self, filename, req, threadclientsocket, hopcount, isclientrequest):
         filesendlib.recvfile(self.storage_path, filename, threadclientsocket)
         if not isclientrequest:
             if filename.endswith("._temp"):
                 actualfilename = filesendlib.actualfilename(filename)
-                if self.ds.actualfileexits(actualfilename):
+                if self.ds.actualfileexits(actualfilename) and os.path.getsize(filesendlib.storagepathprefix(self.storage_path) + filename)==self.meta[filename]["st_size"]:
                     self.ds.createchunkfromactualfile(filename, actualfilename)
                     sendlib.write_socket(threadclientsocket, "sucess1")
                 else:
@@ -144,8 +154,18 @@ class server:
                     for missinghash in missingchunkhashes:
                         chunk = sendlib.read_socket(threadclientsocket)
                         self.ds.createChunkFile(chunk, missinghash)
+                    print "done fetching missing chunks adding owner entry"
+                    self.addownerentry(filename)
             else:
                 sendlib.write_socket(threadclientsocket, "sucess1")
+                self.addownerentry(filename)
+        else:
+            if zk.exists("owner/" + filename) is None:
+                ownerh_p = "( " + str(self.host) + " : " + str(self.port) + " : " + str(self.elect.key) + " )"
+                owners = []
+                owners.append(ownerh_p)
+                zk.create("owner/" + filename, str(owners),
+                          ephemeral=False, makepath=True)
 
         childclient = self.getnextclient()
 
@@ -154,17 +174,22 @@ class server:
         else:
             self.on_child_sucess1(filename, threadclientsocket, isclientrequest)
 
-    def getownerhostandport(self, filename):
+    def getownersdetails(self, filename):
         if zk.exists("owner/" + filename) is not None:
-            owner = zk.get("owner/" + filename)
-            info = owner[0].split(" ")
-            host = info[1]
-            port = int(info[3])
-            if port==self.port and host==self.host:
-                return None
-            return host, port
+            owners = zk.get("owner/" + filename)[0]
+            owners = eval(str(owners))
+            return owners
         return None
 
+    def getownerhostport(self,owners,index):
+        owner=owners[index]
+        info = owner.split(" ")
+        host = info[1]
+        port = int(info[3])
+        name = info[5]
+        if port == self.port and host == self.host:
+            return None
+        return host, port,name
     def read(self, filename, threadclientsocket):
         response = self.response_dic(200)
         meta = self.read_meta(filename)
@@ -174,27 +199,33 @@ class server:
                                                 threadclientsocket,
                                                 str(response), self.ds, True)
         else:
-            ownerh_p=self.getownerhostandport(filename)
-            if ownerh_p is not None:
-                s = socket.socket()
-                s.connect(ownerh_p)
-                if s is not None:
-                    request = {}
-                    request["file_name"] = filename
-                    request["operation"] = "READ"
-                    sendlib.write_socket(s, str(request))
-                    resp = sendlib.read_socket(s)
-                    jp = jsonParser(resp)
-                    if jp.getValue("status") == 200:
-                        self.meta[filename] = jp.getValue("meta")
-                        response["meta"] = self.meta[filename]
-                        filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
-                        s.close()
-                        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
-                                                    threadclientsocket,
-                                                    str(response), self.ds, True)
-                else:
-                    return 404
+            owners=self.getownersdetails(filename)
+            for i in range(len(owners)):
+                print "owners "+str(owners)
+                ownerh_p=self.getownerhostport(owners,i)
+                if ownerh_p is not None:
+                    if zk.exists(ownerh_p[2]) is not None:
+                        s = socket.socket()
+                        s.connect((ownerh_p[0],ownerh_p[1]))
+                        if s is not None:
+                            request = {}
+                            request["file_name"] = filename
+                            request["operation"] = "READ"
+                            sendlib.write_socket(s, str(request))
+                            resp = sendlib.read_socket(s)
+                            jp = jsonParser(resp)
+                            if jp.getValue("status") == 200:
+                                self.meta[filename] = jp.getValue("meta")
+                                response["meta"] = self.meta[filename]
+                                filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
+                                s.close()
+                                filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
+                                                            threadclientsocket,
+                                                            str(response), self.ds, True)
+                                self.addownerentry(filename)
+                                return
+            return 404
+
 
 
     def list(self, threadclientsocket):
@@ -274,7 +305,7 @@ class server:
         if os.path.exists(storagepath + filename):
             size = os.path.getsize(storagepath + filename)
         else:
-            size = self.ds.findfilelength(storagepath + filename)
+            size = self.ds.findfilelength(filename)
         self.meta[filename]["st_size"] = size
         self.meta[filename]["st_ctime"] = time.time()
 
@@ -296,11 +327,19 @@ class server:
                             self.requesttokens.add(requestToken)
                             self.handlechildwrite(file + "._temp", str(request), None, self.getnextclient(), False)
                             zk.delete("dedupequeue/" + file)
-                            ownerh_p=self.getownerhostandport(file)
-                            if ownerh_p is not None:
-                                c=client(ownerh_p[0],ownerh_p[1])
-                                self.handlechildwrite(file + "._temp", str(request), None,c, False)
-                                c.close()
+                            owners = self.getownersdetails(file)
+                            for i in range(len(owners)):
+                                ownerh_p = self.getownerhostport(owners, i)
+                                if ownerh_p is not None:
+                                    if zk.exists(ownerh_p[2]) is not None:
+                                            #writing to first existing owner
+                                            c=client(ownerh_p[0],ownerh_p[1])
+                                            self.handlechildwrite(file + "._temp", str(request), None,c, False)
+                                            c.close()
+                                            return
+                                # if ownerh_p is None, then ownerh_p belongs to the same node, so terminating
+                                else:
+                                    return
                     except NodeExistsError:
                         pass
 
@@ -335,19 +374,16 @@ class server:
                     reqdic["token"] = requestToken
                     self.requesttokens.add(requestToken)
                     self.store_meta_memory(actualfilename, jp)
-                    if zk.exists("owner/" + filename) is None:
-                        zk.create("owner/" + filename, "( " + str(self.host) + " : " + str(self.port) + " )",
-                                    ephemeral=False, makepath=True)
                 # hopcount- no of hops the actual file must be farwarded
                 updatedhopcount = self.gethopcount(jp)
-                if updatedhopcount >= 0 and updatedhopcount < 99:
+                if updatedhopcount >= 0:
                     req = self.updatehopcountrequest(jp, updatedhopcount)
                 self.create(filename, req, threadclientsocket, updatedhopcount, isclientrequest)
                 if filename == actualfilename:
                     if isclientrequest:
                         self.updatesize(actualfilename)
                         if zk.exists("metadata/" + filename) is None:
-                            zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=True, makepath=True)
+                            zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=False, makepath=True)
             elif operation == "READ":
                 filename = jp.getValue("file_name")
                 self.read(filename, threadclientsocket)
