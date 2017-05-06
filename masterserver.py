@@ -152,9 +152,13 @@ class server:
         if not isclientrequest:
             if filename.endswith("._temp"):
                 actualfilename = filesendlib.actualfilename(filename)
-                if self.ds.actualfileexits(actualfilename) and self.checkcompletefilepresent(actualfilename,req):
-                        self.ds.createchunkfromactualfile(filename, actualfilename)
-                        sendlib.write_socket(threadclientsocket, "sucess1")
+                if self.ds.actualfileexits(actualfilename):
+                    #waiting for the actual content to reach completely
+                    print "wait for actual content to complete"
+                    while(not self.checkcompletefilepresent(actualfilename, req)):
+                        time.sleep(1)
+                    self.ds.createchunkfromactualfile(filename, actualfilename)
+                    sendlib.write_socket(threadclientsocket, "sucess1")
                 else:
                     missingchunkhashes = self.ds.findmissingchunk(filename)
                     response = {}
