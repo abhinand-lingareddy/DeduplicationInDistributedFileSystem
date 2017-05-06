@@ -28,7 +28,8 @@ class server:
         self.meta = meta
         self.zk = zk
         self.requesttokens = set()
-        self.no_dedupe_servers = 2  # no of deduplication servers, used only when this is the master node
+        self.actual_content_hops = 2
+        self.dedupe_content_hops = 2
         self.lock = Lock()
         self.ds = dedupe.deduplication(dedupepath=storage_path)
         self.host = host
@@ -153,38 +154,47 @@ class server:
         else:
             self.on_child_sucess1(filename, threadclientsocket, isclientrequest)
 
-    def read(self, filename, threadclientsocket):
-        response = self.response_dic(200)
-        meta = self.read_meta(filename)
+    def getownerhostandport(self, filename):
         if zk.exists("owner/" + filename) is not None:
             owner = zk.get("owner/" + filename)
             info = owner[0].split(" ")
             host = info[1]
             port = int(info[3])
-            if host == self.host and port == self.port:
+            if port==self.port and host==self.host:
+                return None
+            return host, port
+        return None
+
+    def read(self, filename, threadclientsocket):
+        response = self.response_dic(200)
+        meta = self.read_meta(filename)
+        if self.ds.actualfileexits(filename) or self.ds.dedupefileexits(filename) :
                 response["meta"] = self.meta[filename]
                 filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
                                                 threadclientsocket,
                                                 str(response), self.ds, True)
-            else:
-                s = socket.socket()
-                s.connect((host, port))
-                request = {}
-                request["file_name"] = filename
-                request["operation"] = "READ"
-                sendlib.write_socket(s, str(request))
-                resp = sendlib.read_socket(s)
-                jp = jsonParser(resp)
-                if jp.getValue("status") == 200:
-                    self.meta[filename] = jp.getValue("meta")
-                    response["meta"] = self.meta[filename]
-                    filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
-                    s.close()
-                    filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
-                                                threadclientsocket,
-                                                str(response), self.ds, True)
         else:
-            return 404
+            ownerh_p=self.getownerhostandport(filename)
+            if ownerh_p is not None:
+                s = socket.socket()
+                s.connect(ownerh_p)
+                if s is not None:
+                    request = {}
+                    request["file_name"] = filename
+                    request["operation"] = "READ"
+                    sendlib.write_socket(s, str(request))
+                    resp = sendlib.read_socket(s)
+                    jp = jsonParser(resp)
+                    if jp.getValue("status") == 200:
+                        self.meta[filename] = jp.getValue("meta")
+                        response["meta"] = self.meta[filename]
+                        filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
+                        s.close()
+                        filesendlib.sendresponseandfile(filesendlib.storagepathprefix(self.storage_path), filename,
+                                                    threadclientsocket,
+                                                    str(response), self.ds, True)
+                else:
+                    return 404
 
 
     def list(self, threadclientsocket):
@@ -248,7 +258,7 @@ class server:
 
     def gethopcount(self, jp):
         if not jp.has("hopcount"):
-            hopcount = self.no_dedupe_servers
+            hopcount = self.actual_content_hops
         else:
             hopcount = jp.getValue("hopcount") - 1
         return hopcount
@@ -280,12 +290,17 @@ class server:
                             self.ds.write(file)
                             request = client.createrequest(file + "._temp")
                             request["meta"] = self.read_meta(file)
-                            request["hopcount"] = 100
+                            request["hopcount"] = self.dedupe_content_hops
                             requestToken = random.getrandbits(128)
                             request["token"] = requestToken
                             self.requesttokens.add(requestToken)
                             self.handlechildwrite(file + "._temp", str(request), None, self.getnextclient(), False)
                             zk.delete("dedupequeue/" + file)
+                            ownerh_p=self.getownerhostandport(file)
+                            if ownerh_p is not None:
+                                c=client(ownerh_p[0],ownerh_p[1])
+                                self.handlechildwrite(file + "._temp", str(request), None,c, False)
+                                c.close()
                     except NodeExistsError:
                         pass
 
