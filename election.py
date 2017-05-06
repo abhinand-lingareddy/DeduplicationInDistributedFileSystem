@@ -1,4 +1,3 @@
-
 import kazoo
 from kazoo.client import KazooState
 
@@ -141,5 +140,3 @@ class election:
                 kazoo.recipe.watchers.DataWatch(self.zk, self.parentkey, func=self.watch_parent)
             child_key=self.get_key(self.childnum)
             kazoo.recipe.watchers.DataWatch(self.zk,child_key , func=self.watch_child)
-
-

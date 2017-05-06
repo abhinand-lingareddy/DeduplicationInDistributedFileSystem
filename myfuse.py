@@ -164,8 +164,8 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 56911
+    port = 64800
 
 
 
-    fuse = FUSE(RemoteFileSystem(host, port), "/home/abhinand/test2", nothreads=True, foreground=True)
+    fuse = FUSE(RemoteFileSystem(host, port), "/home/amani/test1", nothreads=True, foreground=True)
