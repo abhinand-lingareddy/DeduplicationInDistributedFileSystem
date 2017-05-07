@@ -12,6 +12,7 @@ class client:
         self.s = socket.socket()
         self.s.connect((host, port))
 
+
     def sendcreaterequest(self, file_name):
         request=self.createrequest(file_name)
         meta=dict(st_mode=S_IFREG, st_nlink=1,
@@ -67,16 +68,16 @@ class client:
         jp=self.sendreadrequestandgetresponse(file_name)
         return jp.getValue("status")
 
-    def openforread(self,file_name):
+    def openforread(self,file_name,path):
 
         if self.sendreadrequestandgetstatus(file_name)==200:
-            f = filesendlib.getfilepointer(None, file_name)
+            f = filesendlib.getfilepointer(path, file_name)
         else:
             f=None
         return f
 
-    def read(self,file_name):
-        f=self.openforread(file_name)
+    def read(self,file_name,path):
+        f=self.openforread(file_name,path)
         if f is not None:
             #filesendlib.recvfile(None,file_name,self.s)
             filesendlib.recvfilewithpointer(f,self.s)
@@ -105,7 +106,7 @@ class client:
 
 if __name__ == '__main__':
     host = socket.gethostname()
-    port = 50992
+    port = 49548
 
     c=client(host,port)
 
@@ -124,7 +125,7 @@ if __name__ == '__main__':
                 c.createoperation(file_name, file_path)
             elif(x==2):
                 file_name=raw_input("enter filename")
-                c.read(file_name)
+                c.read(file_name,None)
             elif(x==3):
                 print c.listoperation()
             #exit operation
