@@ -18,7 +18,7 @@ def main():
     threads=[]
     # creating clients
     for i in range(10):
-        t = threading.Thread(target=createtask,args=([53272,58431,61305],"client"+str(i)))
+        t = threading.Thread(target=createtask,args=([53945,59288,57906],"client"+str(i)))
         t.daemon = True
         threads.append(t)
 
