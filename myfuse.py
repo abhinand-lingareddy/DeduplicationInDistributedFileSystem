@@ -10,6 +10,7 @@ from time import time
 
 import socket
 from client import client
+import sys
 
 
 
@@ -164,8 +165,9 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 64800
+    port = int(sys.argv[1]) #64800
+    mountpoint = sys.argv[2]
 
 
 
-    fuse = FUSE(RemoteFileSystem(host, port), "/home/amani/test1", nothreads=True, foreground=True)
+    fuse = FUSE(RemoteFileSystem(host, port), mountpoint, nothreads=True, foreground=True)

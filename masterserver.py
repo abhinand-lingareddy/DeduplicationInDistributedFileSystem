@@ -15,6 +15,7 @@ from threading import Lock
 import random
 import kazoo
 import logging
+import sys
 
 
 class server:
@@ -398,7 +399,7 @@ if __name__ == '__main__':
     root_path = "/root"
     leader_path = root_path + "/leader"
 
-    peer_port = random.randrange(49152, 65535)
+    peer_port = int(sys.argv[1]) #random.randrange(49152, 65535)
 
     zk = KazooClient(hosts='127.0.0.1:2181')
 
