@@ -45,11 +45,6 @@ class server:
             print(str(meta_string[0]))
             self.meta[newfile]=eval(str(meta_string[0]))
 
-    def removeFiles(self,oldfiles):
-        for oldfile in oldfiles:
-            print "remove old files metadata",oldfile
-            del self.meta[oldfile]
-
     def updatemetadata(self,updatedfiles):
         print "metadata update called with files"+str(updatedfiles)
         print "current metadata"+str(self.meta.keys())
@@ -58,9 +53,6 @@ class server:
         n = cset - s
         if len(n) > 0:
             self.addFiles(n)
-        n = s - cset
-        if len(n) > 0:
-            self.removeFiles(n)
 
     # todo
     def getname(self):
@@ -145,6 +137,7 @@ class server:
         else:
             resdic = eval(req)
             metafilesize = resdic["meta"]["st_size"]
+        print "sizes "+str(actualfilesize)+" "+str(metafilesize)
         return actualfilesize == metafilesize
 
     def create(self, filename, req, threadclientsocket, hopcount, isclientrequest):
@@ -156,6 +149,7 @@ class server:
                     #waiting for the actual content to reach completely
                     print "wait for actual content to complete"
                     while(not self.checkcompletefilepresent(actualfilename, req)):
+                        print "wait for actual content to complete"
                         time.sleep(1)
                     self.ds.createchunkfromactualfile(filename, actualfilename)
                     sendlib.write_socket(threadclientsocket, "sucess1")
@@ -228,7 +222,7 @@ class server:
                             resp = sendlib.read_socket(s)
                             jp = jsonParser(resp)
                             if jp.getValue("status") == 200:
-                                self.meta[filename] = jp.getValue("meta")
+                                #self.meta[filename] = jp.getValue("meta")
                                 response["meta"] = self.meta[filename]
                                 filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
                                 s.close()
@@ -278,6 +272,7 @@ class server:
         return str(response)
     #todo
     def store_meta_memory(self, filename, jp):
+        print "added metadata for file "+filename
         self.meta[filename] = jp.getValue("meta")
 
     def read_meta(self, filename):
