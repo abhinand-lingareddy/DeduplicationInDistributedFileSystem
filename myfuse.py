@@ -163,7 +163,7 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 
 if __name__ == '__main__':
 
-    logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
     port = int(sys.argv[1]) #64800
     mountpoint = sys.argv[2]

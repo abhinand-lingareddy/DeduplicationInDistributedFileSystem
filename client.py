@@ -105,7 +105,7 @@ class client:
 
 if __name__ == '__main__':
     host = socket.gethostname()
-    port = 50992
+    port = 49152
 
     c=client(host,port)
 
