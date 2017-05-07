@@ -28,9 +28,7 @@ class RemoteFileSystem(LoggingMixIn, Operations):
         self.sharedclient=client(host, port)
         self.privateclients={} #map between fd and private clients
         now = time()
-        #unimplemented methods have files parameter
-        self.files={}
-        self.files['/'] = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
+        self.rootmetadata = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                st_mtime=now, st_atime=now, st_nlink=2)
 
 
@@ -60,7 +58,7 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 
     def getattr(self, path, fh=None):
         if path == '/':
-            return self.files['/']
+            return self.rootmetadata
         path = self.getpath(path)
         if path not in self.l:
             raise FuseOSError(ENOENT)
@@ -74,14 +72,10 @@ class RemoteFileSystem(LoggingMixIn, Operations):
         return ''
 
     def listxattr(self, path):
-        attrs = self.files[path].get('attrs', {})
-        return attrs.keys()
+        return {}
 
     def mkdir(self, path, mode):
-        self.files[path] = dict(st_mode=(S_IFDIR | mode), st_nlink=2,
-                                st_size=0, st_ctime=time(), st_mtime=time(),
-                                st_atime=time())
-        self.files['/']['st_nlink'] += 1
+        pass
 
     def open(self, path, flags):
         self.fd += 1
@@ -107,41 +101,31 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 
 
     def readlink(self, path):
-        path = self.getpath(path)
-        return self.data[path]
+        pass
 
     def removexattr(self, path, name):
-        attrs = self.files[path].get('attrs', {})
-        try:
-            del attrs[name]
-        except KeyError:
-            pass        # Should return ENOATTR
+        pass
 
     def rename(self, old, new):
-        self.files[new] = self.files.pop(old)
+        pass
 
     def rmdir(self, path):
-        self.files.pop(path)
-        self.files['/']['st_nlink'] -= 1
+        pass
 
     def setxattr(self, path, name, value, options, position=0):
-        attrs = self.files[path].setdefault('attrs', {})
-        attrs[name] = value
+        pass
 
     def statfs(self, path):
         return dict(f_bsize=1024, f_blocks=409600, f_bavail=204800)
 
     def symlink(self, target, source):
-        self.files[target] = dict(st_mode=(S_IFLNK | 0o777), st_nlink=1,
-                                  st_size=len(source))
-        self.data[target] = source
+        pass
 
     def truncate(self, path, length, fh=None):
-        self.data[path] = self.data[path][:length]
-        self.files[path]['st_size'] = length
+        pass
 
     def unlink(self, path):
-        self.files.pop(path)
+        pass
 
     def utimens(self, path, times=None):
         pass
@@ -164,8 +148,8 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG)
     host = socket.gethostname()
-    port = 64800
+    port = 65100
 
 
 
-    fuse = FUSE(RemoteFileSystem(host, port), "/home/amani/test1", nothreads=True, foreground=True)
+    fuse = FUSE(RemoteFileSystem(host, port), "/home/abhinand/test1", nothreads=True, foreground=True)
