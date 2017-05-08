@@ -27,7 +27,7 @@ def read_socket(soc):
         else:
             bufflength=length-i
         st=soc.recv(bufflength)
-        print "st "+st
+        #print "st "+st
         request.append(st)
         i=i+bufflength
 
