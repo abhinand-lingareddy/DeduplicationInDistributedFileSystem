@@ -2,7 +2,7 @@ def no_to_bytes(no):
     b=str(no)
     non_zeroscounter=len(b)
     zeros=[]
-    for i in range(4-non_zeroscounter):
+    for i in range(12-non_zeroscounter):
         zeros.append("0")
     return "".join(zeros)+b
 
@@ -12,10 +12,12 @@ def bytes_to_no(b):
 
 
 def read_socket(soc):
-    length=soc.recv(4)
+    length=soc.recv(12)
+    print "length "+str(length)
     if(len(length)==0):
         return None
     length=bytes_to_no(length)
+
 
     i=0
     request=[]
@@ -24,7 +26,9 @@ def read_socket(soc):
             bufflength=512
         else:
             bufflength=length-i
-        request.append(soc.recv(bufflength))
+        st=soc.recv(bufflength)
+        print "st "+st
+        request.append(st)
         i=i+bufflength
 
     st="".join(request)
