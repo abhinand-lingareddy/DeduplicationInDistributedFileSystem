@@ -262,7 +262,10 @@ class server:
         #     result["files"] = []
         files = [file for file in self.meta]
         result["files"] = files
-        sendlib.write_socket(threadclientsocket, str(result))
+        result=str(result)
+        print "list operation"+result
+        print "length of list operation "+str(len(result))
+        sendlib.write_socket(threadclientsocket, result)
 
     def response_dic(self, result):
         code = {
@@ -457,7 +460,7 @@ if __name__ == '__main__':
 
     peer_port = random.randrange(49152, 65535)
 
-    zk = KazooClient(hosts='127.0.0.1:2181')
+    zk = KazooClient(hosts='localhost:2181')
 
     zk.start()
 
