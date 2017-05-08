@@ -13,7 +13,7 @@ class dedupewritevariables():
 
 
 class deduplication():
-    def __init__(self, windowSize=10, Q=11497, D=256, boundary_marker=10, boundary=1, dedupepath=""):
+    def __init__(self, windowSize=10, Q=11497, D=256, boundary_marker=12, boundary=1, dedupepath=""):
         self.windowSize=windowSize#10
         self.Q=Q#11497
         self.D=D#256
@@ -216,7 +216,7 @@ class deduplication():
                         self.processChunk(currentFile,lastIndex, index,dv.chunk)
                         dv.chunk=[]
                         lastIndex = index
-                elif (index - lastIndex >= 65536):
+                elif (index - lastIndex >= 8192):
                     # print("sig & boundary", sig, index, index-lastIndex)
                     print("chunk size =", index - lastIndex)
                     self.processChunk(currentFile,lastIndex, index,dv.chunk)
