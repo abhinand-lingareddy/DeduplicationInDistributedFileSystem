@@ -14,10 +14,12 @@ def bytes_to_no(b):
 def read_socket(soc):
     length=soc.recv(12)
     print "length "+str(length)
-    print "length "+str(length)
     if(len(length)==0):
         return None
     length=bytes_to_no(length)
+
+    print "length in number "+str(length)
+
 
 
     i=0
@@ -47,5 +49,7 @@ def write_socket(soc, response):
             bufflength=512
         else:
             bufflength=length-i
-        soc.send(response[i:i+bufflength])
+        st=response[i:i + bufflength]
+        print "now sending "+st
+        soc.send(st)
         i=i+bufflength
