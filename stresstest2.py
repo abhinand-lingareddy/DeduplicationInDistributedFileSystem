@@ -10,7 +10,7 @@ def createtask(hosts,ports,name):
     for i in range(1):
         r=randint(0, len(ports) - 1)
         c = client.client(hosts[0], ports[0])
-        filename="duplicate"
+        filename="sample"
         c.createoperation(name+"_N"+str(i),filename+".txt" )
         c.close()
 

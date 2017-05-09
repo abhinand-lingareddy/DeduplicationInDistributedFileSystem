@@ -3,11 +3,17 @@ from kazoo.client import KazooClient
 from random import randint
 
 
-def selectClient():
-    #zk = KazooClient(hosts='152.46.16.201:2181')
-    zk = KazooClient(hosts='localhost:2181')
+def getzk():
+    zk = KazooClient(hosts='152.46.16.201:2181')
 
     zk.start()
+
+    return zk
+
+
+
+def selectClient():
+    zk=getzk()
 
 
     children=zk.get_children("/root")
@@ -24,11 +30,7 @@ def selectClient():
     return host,port
 
 def selectAllClient():
-    #zk = KazooClient(hosts='152.46.16.201:2181')
-    zk = KazooClient(hosts='localhost:2181')
-
-    zk.start()
-
+    zk = getzk()
 
     children=zk.get_children("/root")
 
