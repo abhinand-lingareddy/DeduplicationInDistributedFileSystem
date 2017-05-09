@@ -11,6 +11,7 @@ from time import time
 import socket
 from client import client
 import sys
+import balancer
 
 
 
@@ -164,10 +165,9 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 if __name__ == '__main__':
 
     # logging.basicConfig(level=logging.DEBUG)
-    host = socket.gethostname()
-    port = int(sys.argv[1]) #64800
-    mountpoint = sys.argv[2]
-
-
+    #host = "152.46.17.67"
+    #port = 60049
+    host,port=balancer.selectClient()
+    mountpoint = "/home/abhinand/test3"
 
     fuse = FUSE(RemoteFileSystem(host, port), mountpoint, nothreads=True, foreground=True)

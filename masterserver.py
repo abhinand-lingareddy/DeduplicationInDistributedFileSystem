@@ -367,7 +367,7 @@ class server:
                                     break
                     except NodeExistsError:
                         pass
-                
+
 
 
     def handle_client(self, threadclientsocket):
@@ -462,7 +462,8 @@ if __name__ == '__main__':
 
     peer_port = random.randrange(49152, 65535)
 
-    zk = KazooClient(hosts='152.46.16.201:2181')
+    #zk = KazooClient(hosts='152.46.16.201:2181')
+    zk = KazooClient(hosts='localhost:2181')
 
     zk.start()
 

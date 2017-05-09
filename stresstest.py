@@ -3,13 +3,16 @@ import client
 from random import randint
 import threading
 import time
-host = socket.gethostname()
-
-def createtask(ports,name):
-    for i in range(10):
+import balancer
+#host = ["152.46.16.201","152.46.19.121","152.46.17.67","152.56.17.118"]
+#host=socket.gethostbyname(socket.gethostname())
+#host="152.46.16.201"
+def createtask(hosts,ports,name):
+    for i in range(1):
         r=randint(0, len(ports) - 1)
-        c = client.client(host, ports[r])
-        c.createoperation(name+"_"+str(i), "sample.txt")
+        c = client.client(hosts[r], ports[r])
+        filename="sample"
+        c.createoperation(name+"A_"+str(i),filename+".txt" )
         c.close()
 
 
@@ -17,17 +20,9 @@ def main():
     start_time = time.time()
     threads=[]
     # creating clients
-    for i in range(10):
-        t = threading.Thread(target=createtask,args=([53945,59288,57906],"client"+str(i)))
-        t.daemon = True
-        threads.append(t)
-
-    for i in range(10):
-        threads[i].start()
-
-    for i in range(10):
-        threads[i].join()
-
+    hosts,ports=balancer.selectAllClient()
+    for i in range(20):
+        createtask(hosts,ports,"c"+str(i))
     print "time: "+str(time.time()- start_time)
 
 main()

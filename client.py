@@ -10,6 +10,7 @@ class used by server/console/fuse for making calls to other servers
 class client:
     def __init__(self,host,port):
         self.s = socket.socket()
+        self.s.settimeout(300)
         self.s.connect((host, port))
 
 
