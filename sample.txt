@@ -1,0 +1,46 @@
+int i, tmp;
+	text_t *txt2;
+	char *c;
+
+	txt2 = create_text();
+	append_line(txt2, "1");
+	append_line(txt2, "2");
+	append_line(txt2, "3");
+	append_line(txt2, "4");
+	append_line(txt2, "5");
+	append_line(txt2, "6");
+	append_line(txt2, "7");
+	append_line(txt2, "d2");
+	append_line(txt2, "8");
+	append_line(txt2, "d1");
+
+	delete_line(txt2, 10);
+	append_line(txt2, "9");
+	delete_line(txt2, 8);
+
+	append_line(txt2, "10");
+
+
+	for (i = 1; i <= 5; i++) {
+	 c = get_line(txt2, i);
+	 //EXPECT_EQ(*c,'A') << ("line %d of txt2 should be A, found %s\n", i, c);
+	 }
+
+	 for (i = 1; i <= 5; i++) {
+	 delete_line(txt2, 1);
+	 }
+
+	 for (i = 1; i <= 5; i++) {
+	 c = get_line(txt2, i);
+	 //EXPECT_EQ(*c,'B') << ("line %d of txt2 should be B, found %s\n", i, c);
+	 }
+
+	 set_line(txt2, 100, "the last line");
+
+
+	 for (i = 5; i >= 1; i--) {
+	 delete_line(txt2, i);
+	 }
+	 char *b = get_line(txt2, 1);
+	 int a = 0;
+	 //ASSERT_STREQ(get_line(txt2,  1), "the last line") << ("found at the last line:   %s\n", get_line(txt2,  1));*/

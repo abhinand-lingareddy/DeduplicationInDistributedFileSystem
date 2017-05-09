@@ -15,7 +15,8 @@ from threading import Lock
 import random
 import kazoo
 import logging
-import sys
+from os import listdir
+from os.path import isfile, join
 
 
 class server:
@@ -35,6 +36,12 @@ class server:
         self.ds = dedupe.deduplication(dedupepath=storage_path)
         self.host = host
         self.port = port
+        self.currentfiles=[]
+        allfiles = [f for f in listdir(storage_path) if isfile(join(storage_path, f))]
+        for cfile in allfiles:
+            if cfile.endswith("._temp"):
+                cfile=cfile[:len("._temp")*-1]
+            self.currentfiles.append(cfile)
         kazoo.recipe.watchers.ChildrenWatch(self.zk,"/metadata", self.updatemetadata)
 
 
@@ -46,11 +53,6 @@ class server:
             print(str(meta_string[0]))
             self.meta[newfile]=eval(str(meta_string[0]))
 
-    def removeFiles(self,oldfiles):
-        for oldfile in oldfiles:
-            print "remove old files metadata",oldfile
-            del self.meta[oldfile]
-
     def updatemetadata(self,updatedfiles):
         print "metadata update called with files"+str(updatedfiles)
         print "current metadata"+str(self.meta.keys())
@@ -59,9 +61,6 @@ class server:
         n = cset - s
         if len(n) > 0:
             self.addFiles(n)
-        n = s - cset
-        if len(n) > 0:
-            self.removeFiles(n)
 
     # todo
     def getname(self):
@@ -139,14 +138,6 @@ class server:
                 owners.append(ownerh_p)
                 zk.set("owner/" + filename, str(owners))
 
-    def checkcompletefilepresent(self,actualfilename,req):
-        actualfilesize = os.path.getsize(filesendlib.storagepathprefix(self.storage_path) + actualfilename)
-        if actualfilename in self.meta:
-            metafilesize = self.meta[actualfilename]["st_size"]
-        else:
-            resdic = eval(req)
-            metafilesize = resdic["meta"]["st_size"]
-        return actualfilesize == metafilesize
 
     def create(self, filename, req, threadclientsocket, hopcount, isclientrequest):
         filesendlib.recvfile(self.storage_path, filename, threadclientsocket)
@@ -155,10 +146,13 @@ class server:
                 actualfilename = filesendlib.actualfilename(filename)
                 if self.ds.actualfileexits(actualfilename):
                     #waiting for the actual content to reach completely
-                    print "wait for actual content to complete"
-                    while(not self.checkcompletefilepresent(actualfilename, req)):
+                    print "wait for actual content to complete "+actualfilename
+                    while(not (actualfilename in self.currentfiles)):
+                        print "wait for actual content to complete "+actualfilename
                         time.sleep(1)
+
                     self.ds.createchunkfromactualfile(filename, actualfilename)
+                    print "done waiting for "+actualfilename
                     sendlib.write_socket(threadclientsocket, "sucess1")
                 else:
                     missingchunkhashes = self.ds.findmissingchunk(filename)
@@ -169,11 +163,24 @@ class server:
                         chunk = sendlib.read_socket(threadclientsocket)
                         self.ds.createChunkFile(chunk, missinghash)
                     print "done fetching missing chunks adding owner entry"
+                    #if file comes before this operation completes
+                    if filename in self.currentfiles:
+                        os.remove(filesendlib.storagepathprefix(storage_path) + filename)
+                    else:
+                        self.currentfiles.append(filename[:len("._temp")*-1])
+                    print "added curren file "+str(self.currentfiles)
                     self.addownerentry(filename)
             else:
+                if filename in self.currentfiles:
+                    os.remove(filesendlib.storagepathprefix(storage_path)+filename)
+                else:
+                    self.currentfiles.append(filename)
+                print "added curren file " + str(self.currentfiles)
                 sendlib.write_socket(threadclientsocket, "sucess1")
                 self.addownerentry(filename)
         else:
+            self.updatesize(filename)
+            self.currentfiles.append(filename)
             if zk.exists("owner/" + filename) is None:
                 ownerh_p = "( " + str(self.host) + " : " + str(self.port) + " : " + str(self.elect.key) + " )"
                 owners = []
@@ -229,7 +236,7 @@ class server:
                             resp = sendlib.read_socket(s)
                             jp = jsonParser(resp)
                             if jp.getValue("status") == 200:
-                                self.meta[filename] = jp.getValue("meta")
+                                #self.meta[filename] = jp.getValue("meta")
                                 response["meta"] = self.meta[filename]
                                 filesendlib.recvfile(filesendlib.storagepathprefix(self.storage_path), filename, s)
                                 s.close()
@@ -255,7 +262,10 @@ class server:
         #     result["files"] = []
         files = [file for file in self.meta]
         result["files"] = files
-        sendlib.write_socket(threadclientsocket, str(result))
+        result=str(result)
+        print "list operation"+result
+        print "length of list operation "+str(len(result))
+        sendlib.write_socket(threadclientsocket, result)
 
     def response_dic(self, result):
         code = {
@@ -279,6 +289,7 @@ class server:
         return str(response)
     #todo
     def store_meta_memory(self, filename, jp):
+        print "added metadata for file "+filename
         self.meta[filename] = jp.getValue("meta")
 
     def read_meta(self, filename):
@@ -327,7 +338,7 @@ class server:
         while (True):
             pending_files = self.zk.get_children("dedupequeue")
             for file in pending_files:
-                if self.ds.actualfileexits(file):
+                if file in self.currentfiles and self.ds.actualfileexits(file):
                     try:
                         if zk.exists("dedupeserver/" + file) is None:
                             zk.create("dedupeserver/" + file, str(self.storage_path), ephemeral=True, makepath=True)
@@ -350,10 +361,10 @@ class server:
                                             c=client(ownerh_p[0],ownerh_p[1])
                                             self.handlechildwrite(file + "._temp", str(request), None,c, False)
                                             c.close()
-                                            return
+                                            break
                                 # if ownerh_p is None, then ownerh_p belongs to the same node, so terminating
                                 else:
-                                    return
+                                    break
                     except NodeExistsError:
                         pass
 
@@ -395,7 +406,6 @@ class server:
                 self.create(filename, req, threadclientsocket, updatedhopcount, isclientrequest)
                 if filename == actualfilename:
                     if isclientrequest:
-                        self.updatesize(actualfilename)
                         if zk.exists("metadata/" + filename) is None:
                             zk.create("metadata/" + filename, str(self.meta[filename]), ephemeral=False, makepath=True)
             elif operation == "READ":
@@ -448,9 +458,9 @@ if __name__ == '__main__':
     root_path = "/root"
     leader_path = root_path + "/leader"
 
-    peer_port = int(sys.argv[1]) #random.randrange(49152, 65535)
+    peer_port = random.randrange(49152, 65535)
 
-    zk = KazooClient(hosts='127.0.0.1:2181')
+    zk = KazooClient(hosts='localhost:2181')
 
     zk.start()
 

@@ -2,7 +2,7 @@ def no_to_bytes(no):
     b=str(no)
     non_zeroscounter=len(b)
     zeros=[]
-    for i in range(4-non_zeroscounter):
+    for i in range(12-non_zeroscounter):
         zeros.append("0")
     return "".join(zeros)+b
 
@@ -12,10 +12,15 @@ def bytes_to_no(b):
 
 
 def read_socket(soc):
-    length=soc.recv(4)
+    length=soc.recv(12)
+    print "length "+str(length)
     if(len(length)==0):
         return None
     length=bytes_to_no(length)
+
+    print "length in number "+str(length)
+
+
 
     i=0
     request=[]
@@ -24,7 +29,9 @@ def read_socket(soc):
             bufflength=512
         else:
             bufflength=length-i
-        request.append(soc.recv(bufflength))
+        st=soc.recv(bufflength)
+        #print "st "+st
+        request.append(st)
         i=i+bufflength
 
     st="".join(request)
@@ -34,7 +41,7 @@ def read_socket(soc):
 def write_socket(soc, response):
     length=len(response)
     length_bytes=no_to_bytes(length)
-
+    print "length "+str(length)+" length bytes "+length_bytes
     soc.send(length_bytes)
     i=0
     while(i<length):
@@ -42,5 +49,7 @@ def write_socket(soc, response):
             bufflength=512
         else:
             bufflength=length-i
-        soc.send(response[i:i+bufflength])
+        st=response[i:i + bufflength]
+        print "now sending "+st
+        soc.send(st)
         i=i+bufflength
