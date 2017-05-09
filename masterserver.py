@@ -367,6 +367,8 @@ class server:
                                     break
                     except NodeExistsError:
                         pass
+                time.sleep(10)
+
 
     def handle_client(self, threadclientsocket):
         # try:
