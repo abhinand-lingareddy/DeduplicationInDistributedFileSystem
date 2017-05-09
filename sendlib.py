@@ -1,3 +1,5 @@
+import pickle
+
 def no_to_bytes(no):
     b=str(no)
     non_zeroscounter=len(b)
@@ -31,14 +33,19 @@ def read_socket(soc):
             bufflength=length-i
         st=soc.recv(bufflength)
         #print "st "+st
+        st = pickle.loads(st)
         request.append(st)
         i=i+bufflength
 
     st="".join(request)
-    st=st.encode("utf-8")
+    # st = pickle.loads(soc.recv(12000))
+    # print "read socket"+st
+    # st=st.encode("utf-8")
+
     return st
 
 def write_socket(soc, response):
+    response = pickle.dumps(response)
     length=len(response)
     length_bytes=no_to_bytes(length)
     print "length "+str(length)+" length bytes "+length_bytes
@@ -53,3 +60,5 @@ def write_socket(soc, response):
         print "now sending "+st
         soc.send(st)
         i=i+bufflength
+    print "write socket" + response
+    # soc.send(pickle.dumps(response))
