@@ -1,4 +1,4 @@
-# DeduplicationInDistributedFileSystem
+# Distributed File System with Deduplication
 
 <h2><strong>Instructions to run</strong></h2>
 <p><strong>To start the server</strong></p>
@@ -16,3 +16,6 @@
 <p><strong>To run stress test</strong></p>
 <p>python stresstest2.py &lt;zookeeperhostname&gt; &lt;filename&gt;</p>
 <p>creates 10 files each using 10 clients parallely. (In total creates 100 files).</p>
+<p>&nbsp;</p>
+<p><a href="https://drive.google.com/file/d/0B_vtXHp40F8DMmRIRkw4Uzc3OW5HRU1SLVN6amZ0NHdxSFVR/view?usp=sharing">Read more about this system</a></p>
+<p><a href="https://drive.google.com/file/d/0B_vtXHp40F8DMl9oNThVckxmRjVldWlUdjF3WTQxWTMtTFhN/view?usp=sharing">presentation</a></p>
