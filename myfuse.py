@@ -165,6 +165,6 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 if __name__ == '__main__':
 
     host,port=balancer.selectClient()
-    mountpoint =  sys.argv[1]
+    mountpoint =  sys.argv[2]
 
     fuse = FUSE(RemoteFileSystem(host, port), mountpoint, nothreads=True, foreground=True)

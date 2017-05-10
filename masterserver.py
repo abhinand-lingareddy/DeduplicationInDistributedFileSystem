@@ -461,20 +461,22 @@ if __name__ == '__main__':
 
     root_path = "/root"
     leader_path = root_path + "/leader"
-
-    peer_port = random.randrange(49152, 65535)
+    if (len(sys.argv)<=2):
+    	peer_port = random.randrange(49152, 65535)
+    else:
+	peer_port = int(sys.argv[2])
 
     #zk = KazooClient(hosts='152.46.16.201:2181')
-    zk = KazooClient(hosts=sys.argv[1])
+    zk = KazooClient(hosts=sys.argv[1]+":2181")
 
     zk.start()
-
-    try:
-        l = zk.get_children(root_path)
-        if len(l) == 0:
-            cleanup(zk)
-    except NoNodeError:
-        cleanup(zk)
+    if (len(sys.argv)<=3) or (not (sys.argv[3]=="true")):
+	    try:
+		l = zk.get_children(root_path)
+		if len(l) == 0:
+		    cleanup(zk)
+	    except NoNodeError:
+		cleanup(zk)
 
     print("started with port", peer_port)
 
