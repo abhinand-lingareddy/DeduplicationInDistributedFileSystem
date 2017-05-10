@@ -18,6 +18,8 @@ import logging
 from os import listdir
 from os.path import isfile, join
 
+import sys
+
 
 class server:
     def __init__(self, host, port, storage_path, elect, meta, zk):
@@ -463,7 +465,7 @@ if __name__ == '__main__':
     peer_port = random.randrange(49152, 65535)
 
     #zk = KazooClient(hosts='152.46.16.201:2181')
-    zk = KazooClient(hosts='152.46.16.201:2181')
+    zk = KazooClient(hosts=sys.argv[1])
 
     zk.start()
 

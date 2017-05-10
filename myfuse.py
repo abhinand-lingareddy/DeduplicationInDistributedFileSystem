@@ -164,10 +164,7 @@ class RemoteFileSystem(LoggingMixIn, Operations):
 
 if __name__ == '__main__':
 
-    # logging.basicConfig(level=logging.DEBUG)
-    #host = "152.46.17.67"
-    #port = 60049
     host,port=balancer.selectClient()
-    mountpoint = "/home/abhinand/test3"
+    mountpoint =  sys.argv[1]
 
     fuse = FUSE(RemoteFileSystem(host, port), mountpoint, nothreads=True, foreground=True)

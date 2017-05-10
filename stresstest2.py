@@ -4,6 +4,7 @@ from random import randint
 import threading
 import time
 import balancer
+import sys
 #host = ["152.46.16.201","152.46.19.121","152.46.17.67","152.56.17.118"]
 
 def createtask(hosts,ports,name):
@@ -11,7 +12,7 @@ def createtask(hosts,ports,name):
         r=randint(0, len(ports) - 1)
         c = client.client(hosts[0], ports[0])
         filename="sample"
-        c.createoperation(name+"_N"+str(i),filename+".txt" )
+        c.createoperation(name+"_N"+str(i),sys.argv[2] )
         c.close()
 
 
