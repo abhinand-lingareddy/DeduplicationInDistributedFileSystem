@@ -1,10 +1,10 @@
 from kazoo.client import KazooClient
 
 from random import randint
-
+import sys
 
 def getzk():
-    zk = KazooClient(hosts='152.46.16.201:2181')
+    zk = KazooClient(hosts=sys.argv[1])
 
     zk.start()
 
